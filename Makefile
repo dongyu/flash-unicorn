@@ -23,7 +23,7 @@ LDFLAGS    := -s -w \
 MIGRATE_SCRIPT := ./scripts/migrate.sh
 RACE_FLAG      := $(shell command -v gcc >/dev/null 2>&1 && echo -race)
 
-.PHONY: help init tools build gen db-check migrate-up migrate-down migrate-reset migrate-status migrate-create dev run test test-int lint vuln tidy docker-build
+.PHONY: help init tools build gen db-check migrate-up migrate-down migrate-reset migrate-status migrate-create dev run seed-user test test-int lint vuln tidy docker-build
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -80,6 +80,11 @@ dev: ## Start server with Air hot reload
 
 run: ## Run server directly
 	$(GO) run ./cmd/server
+
+seed-user: ## Create a user without HTTP (usage: make seed-user email=<email> [role=user|admin])
+	@test -n "$(email)" || (echo "usage: make seed-user email=<email> [role=user|admin]" && exit 1)
+	@read -r -s -p "Password for $(email): " password; echo; \
+	printf '%s\n' "$$password" | $(GO) run ./cmd/server seed-user --email "$(email)" --role "$(if $(role),$(role),user)"
 
 test: ## Run unit and zero-Docker SQLite integration tests
 	$(GO) test $(RACE_FLAG) ./...
