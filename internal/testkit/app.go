@@ -25,6 +25,7 @@ import (
 	"unicorn/db"
 	"unicorn/internal/adapter/repo/txctx"
 	"unicorn/internal/app"
+	"unicorn/internal/domain"
 	"unicorn/internal/platform/config"
 	"unicorn/internal/platform/database"
 )
@@ -36,30 +37,40 @@ type TestApp struct {
 	SQLiteDriver *riversqlite.Driver
 }
 
-type Option func(*config.Config)
+type Options struct {
+	Config     config.Config
+	AppOptions []app.Option
+}
+
+type Option func(*Options)
 
 func WithServerMode(mode config.ServerMode) Option {
-	return func(c *config.Config) {
-		c.Server.Mode = mode
+	return func(o *Options) {
+		o.Config.Server.Mode = mode
 	}
 }
 
-func NewTestApp(t *testing.T, opts ...Option) *TestApp {
-	t.Helper()
+func WithClock(clock domain.Clock) Option {
+	return func(o *Options) {
+		o.AppOptions = append(o.AppOptions, app.WithClock(clock))
+	}
+}
 
-	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "test.db")
-	cfg := config.Config{
+func WithIDGenerator(idGen domain.IDGenerator) Option {
+	return func(o *Options) {
+		o.AppOptions = append(o.AppOptions, app.WithIDGenerator(idGen))
+	}
+}
+
+func defaultTestConfig() config.Config {
+	return config.Config{
 		App: config.AppConfig{Env: "test"},
 		Server: config.ServerConfig{
 			Mode:            config.ModeAPI,
 			HTTPAddr:        ":0",
 			ShutdownTimeout: 5 * time.Second,
 		},
-		Database: config.DatabaseConfig{
-			URL:          "sqlite://" + dbPath,
-			MaxOpenConns: 1,
-		},
+		Database: config.DatabaseConfig{MaxOpenConns: 1},
 		Log: config.LogConfig{
 			Level:  "debug",
 			Format: "json",
@@ -71,9 +82,20 @@ func NewTestApp(t *testing.T, opts ...Option) *TestApp {
 			BcryptCost: 4,
 		},
 	}
+}
+
+func NewTestApp(t *testing.T, opts ...Option) *TestApp {
+	t.Helper()
+
+	ctx := context.Background()
+	setup := Options{Config: defaultTestConfig()}
 	for _, opt := range opts {
-		opt(&cfg)
+		opt(&setup)
 	}
+	cfg := setup.Config
+
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	cfg.Database.URL = "sqlite://" + dbPath
 
 	rawDB, err := database.Open(ctx, cfg.Database)
 	require.NoError(t, err)
@@ -81,7 +103,7 @@ func NewTestApp(t *testing.T, opts ...Option) *TestApp {
 	require.NoError(t, rawDB.Close())
 
 	testLog := zerolog.New(io.Discard)
-	application, err := app.New(ctx, cfg, testLog)
+	application, err := app.New(ctx, cfg, testLog, setup.AppOptions...)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

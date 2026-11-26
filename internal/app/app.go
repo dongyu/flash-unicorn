@@ -36,7 +36,8 @@ type Application struct {
 	flushSentry   func()
 }
 
-func New(ctx context.Context, cfg config.Config, log zerolog.Logger) (*Application, error) {
+func New(ctx context.Context, cfg config.Config, log zerolog.Logger, opts ...Option) (*Application, error) {
+	deps := resolveDeps(opts)
 	bi := buildinfo.Get()
 	flushSentry, err := telemetry.InitSentry(cfg.Sentry, cfg.App.Env, bi)
 	if err != nil {
@@ -72,8 +73,8 @@ func New(ctx context.Context, cfg config.Config, log zerolog.Logger) (*Applicati
 		pers.tx,
 		pers.notes,
 		enqueuer,
-		domain.SystemClock{},
-		domain.UUIDv7Generator{},
+		deps.Clock,
+		deps.IDGenerator,
 	)
 
 	var httpServer *fiber.App
