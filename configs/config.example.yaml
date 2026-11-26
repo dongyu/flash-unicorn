@@ -23,3 +23,6 @@ sentry:
   enable_tracing: true
   traces_sample_rate: 0.1
   flush_timeout: 2s
+
+auth:
+  bcrypt_cost: 12

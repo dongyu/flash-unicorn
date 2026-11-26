@@ -67,6 +67,9 @@ func NewTestApp(t *testing.T, opts ...Option) *TestApp {
 		River: config.RiverConfig{
 			MaxWorkers: 2,
 		},
+		Auth: config.AuthConfig{
+			BcryptCost: 4,
+		},
 	}
 	for _, opt := range opts {
 		opt(&cfg)

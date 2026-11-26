@@ -1,30 +1,36 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/riverqueue/river/rivermigrate"
 
 	"unicorn/internal/app"
+	"unicorn/internal/domain"
 	"unicorn/internal/platform/buildinfo"
 	"unicorn/internal/platform/config"
 	"unicorn/internal/platform/database"
 	"unicorn/internal/platform/logger"
+	"unicorn/internal/usecase"
 )
 
 const (
-	configUsage  = "usage: server config {db-url|app-env} [--format=raw|migrate] [--config=path]"
-	migrateUsage = "usage: server migrate {river-up|river-down|river-reset|river-status} [--config=path]"
+	configUsage   = "usage: server config {db-url|app-env} [--format=raw|migrate] [--config=path]"
+	migrateUsage  = "usage: server migrate {river-up|river-down|river-reset|river-status} [--config=path]"
+	seedUserUsage = "usage: server seed-user --email <email> [--role user|admin] [--display-name <name>] [--config=path]"
 )
 
 func main() {
-	if err := run(os.Args[1:]); err != nil {
+	if err := run(os.Args[1:], os.Stdin); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			os.Exit(0)
 		}
@@ -33,7 +39,7 @@ func main() {
 	}
 }
 
-func run(args []string) error {
+func run(args []string, stdin io.Reader) error {
 	if len(args) > 0 {
 		switch args[0] {
 		case "version":
@@ -44,6 +50,8 @@ func run(args []string) error {
 			return runConfigCmd(args[1:])
 		case "migrate":
 			return runMigrateCmd(args[1:])
+		case "seed-user":
+			return runSeedUserCmd(args[1:], stdin)
 		case "run":
 			args = args[1:]
 		}
@@ -77,6 +85,55 @@ func run(args []string) error {
 		return err
 	}
 	return application.Run(ctx)
+}
+
+func runSeedUserCmd(args []string, stdin io.Reader) error {
+	fs := flag.NewFlagSet("seed-user", flag.ContinueOnError)
+	configPath := fs.String("config", "", "optional path to YAML configuration file")
+	email := fs.String("email", "", "email address of the user to create")
+	role := fs.String("role", string(domain.RoleUser), "role of the user (user|admin)")
+	displayName := fs.String("display-name", "", "display name of the user")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *email == "" || fs.NArg() > 0 {
+		return errors.New(seedUserUsage)
+	}
+
+	password, err := readPassword(stdin)
+	if err != nil {
+		return err
+	}
+
+	cfg, err := config.Load(config.LoadOptions{ConfigPath: *configPath})
+	if err != nil {
+		return err
+	}
+
+	user, err := app.SeedUser(context.Background(), cfg, usecase.SeedUserInput{
+		Email:       *email,
+		Password:    password,
+		Role:        domain.Role(*role),
+		DisplayName: *displayName,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("created user %s (%s) role=%s\n", user.ID, user.Email, user.Role)
+	return nil
+}
+
+func readPassword(stdin io.Reader) (string, error) {
+	line, err := bufio.NewReader(stdin).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", fmt.Errorf("read password from stdin: %w", err)
+	}
+	password := strings.TrimRight(line, "\r\n")
+	if password == "" {
+		return "", errors.New("password must be provided on stdin")
+	}
+	return password, nil
 }
 
 func runConfigCmd(args []string) error {

@@ -14,6 +14,7 @@ import (
 type RepoHarness struct {
 	TxManager domain.TxManager
 	NoteRepo  domain.NoteRepository
+	UserRepo  domain.UserRepository
 	Enqueuer  domain.JobEnqueuer
 	Cleanup   func()
 }
