@@ -14,6 +14,8 @@ import (
 
 const fixturePostgresDSN = "postgres://yaml:yaml@localhost:5432/yaml?sslmode=disable" //nolint:gosec
 
+const fixtureSigningKey = "fixture-signing-key-0123456789abcdef"
+
 func TestLoad_YAMLThenEnvOverrides(t *testing.T) {
 	yamlPath := filepath.Join(t.TempDir(), "config.yaml")
 	yamlContent := fmt.Sprintf(`
@@ -32,6 +34,10 @@ log:
 river:
   max_workers: 25
 auth:
+  issuer: yaml-issuer
+  secret: fixture-signing-key-0123456789abcdef
+  access_ttl: 5m
+  leeway: 10s
   bcrypt_cost: 12
 sentry:
   dsn: "https://examplePublicKey@o0.ingest.sentry.io/0"
@@ -61,6 +67,10 @@ sentry:
 	require.Equal(t, config.ModeAPI, cfg.Server.Mode)
 	require.Equal(t, "sqlite://./tmp/override.db", cfg.Database.URL)
 	require.InDelta(t, 0.5, cfg.Sentry.TracesSampleRate, 0.0001)
+	require.Equal(t, "yaml-issuer", cfg.Auth.Issuer)
+	require.Equal(t, fixtureSigningKey, cfg.Auth.Secret)
+	require.Equal(t, 5*time.Minute, cfg.Auth.AccessTTL)
+	require.Equal(t, 10*time.Second, cfg.Auth.Leeway)
 }
 
 func TestLoad_RejectsUnsupportedDatabaseScheme(t *testing.T) {
@@ -106,11 +116,78 @@ func TestLoad_RejectsWeakBcryptCostInProduction(t *testing.T) {
 func TestLoad_AcceptsProductionBcryptCostAtFloor(t *testing.T) {
 	cfg, err := config.Load(config.LoadOptions{
 		EnvironFunc: func() []string {
-			return []string{"APP_ENV=production", "AUTH_BCRYPT_COST=10"}
+			return []string{
+				"APP_ENV=production",
+				"AUTH_BCRYPT_COST=10",
+				"AUTH_SECRET=" + fixtureSigningKey,
+			}
 		},
 	})
 	require.NoError(t, err)
 	require.Equal(t, 10, cfg.Auth.BcryptCost)
+}
+
+func TestLoad_AuthDefaults(t *testing.T) {
+	cfg, err := config.Load(config.LoadOptions{
+		EnvironFunc: func() []string { return nil },
+	})
+	require.NoError(t, err)
+	require.Equal(t, "unicorn", cfg.Auth.Issuer)
+	require.GreaterOrEqual(t, len(cfg.Auth.Secret), 32)
+	require.Equal(t, 15*time.Minute, cfg.Auth.AccessTTL)
+	require.Equal(t, 30*time.Second, cfg.Auth.Leeway)
+}
+
+func TestLoad_AuthFromEnv(t *testing.T) {
+	cfg, err := config.Load(config.LoadOptions{
+		EnvironFunc: func() []string {
+			return []string{
+				"AUTH_ISSUER=acme",
+				"AUTH_SECRET=" + fixtureSigningKey,
+				"AUTH_ACCESS_TTL=5m",
+				"AUTH_LEEWAY=10s",
+			}
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "acme", cfg.Auth.Issuer)
+	require.Equal(t, fixtureSigningKey, cfg.Auth.Secret)
+	require.Equal(t, 5*time.Minute, cfg.Auth.AccessTTL)
+	require.Equal(t, 10*time.Second, cfg.Auth.Leeway)
+}
+
+func TestLoad_RejectsShortAuthSecret(t *testing.T) {
+	_, err := config.Load(config.LoadOptions{
+		EnvironFunc: func() []string {
+			return []string{"AUTH_SECRET=too-short"}
+		},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "auth.secret")
+}
+
+func TestLoad_RejectsDevelopmentSecretOutsideDevelopment(t *testing.T) {
+	for _, env := range []string{"test", "staging", "production"} {
+		t.Run(env, func(t *testing.T) {
+			_, err := config.Load(config.LoadOptions{
+				EnvironFunc: func() []string {
+					return []string{"APP_ENV=" + env, "AUTH_BCRYPT_COST=10"}
+				},
+			})
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "auth.secret")
+		})
+	}
+}
+
+func TestLoad_AcceptsCustomAuthSecretOutsideDevelopment(t *testing.T) {
+	cfg, err := config.Load(config.LoadOptions{
+		EnvironFunc: func() []string {
+			return []string{"APP_ENV=staging", "AUTH_SECRET=" + fixtureSigningKey}
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, fixtureSigningKey, cfg.Auth.Secret)
 }
 
 func TestLoad_RejectsBcryptCostOutsideRange(t *testing.T) {

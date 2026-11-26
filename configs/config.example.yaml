@@ -25,4 +25,8 @@ sentry:
   flush_timeout: 2s
 
 auth:
+  issuer: unicorn
+  secret: "change-me-to-a-32-byte-minimum-signing-key"
+  access_ttl: 15m
+  leeway: 30s
   bcrypt_cost: 12

@@ -60,10 +60,17 @@ type RiverConfig struct {
 }
 
 type AuthConfig struct {
-	BcryptCost int `koanf:"bcrypt_cost" validate:"gte=4,lte=14"`
+	Issuer     string        `koanf:"issuer" validate:"required"`
+	Secret     string        `koanf:"secret" validate:"required,min=32"`
+	AccessTTL  time.Duration `koanf:"access_ttl" validate:"required,gt=0"`
+	Leeway     time.Duration `koanf:"leeway" validate:"gte=0"`
+	BcryptCost int           `koanf:"bcrypt_cost" validate:"gte=4,lte=14"`
 }
 
-const productionBcryptCostFloor = 10
+const (
+	productionBcryptCostFloor = 10
+	developmentSigningKey     = "unicorn-development-signing-key-0001"
+)
 
 type SentryConfig struct {
 	DSN              string        `koanf:"dsn"`
@@ -108,6 +115,10 @@ func defaultConfig() Config {
 			FlushTimeout:     2 * time.Second,
 		},
 		Auth: AuthConfig{
+			Issuer:     "unicorn",
+			Secret:     developmentSigningKey,
+			AccessTTL:  15 * time.Minute,
+			Leeway:     30 * time.Second,
 			BcryptCost: 4,
 		},
 	}
@@ -128,6 +139,10 @@ var flatEnvMapping = map[string]string{
 	"SENTRY_ENABLE_TRACING":     "sentry.enable_tracing",
 	"SENTRY_TRACES_SAMPLE_RATE": "sentry.traces_sample_rate",
 	"SENTRY_FLUSH_TIMEOUT":      "sentry.flush_timeout",
+	"AUTH_ISSUER":               "auth.issuer",
+	"AUTH_SECRET":               "auth.secret",
+	"AUTH_ACCESS_TTL":           "auth.access_ttl",
+	"AUTH_LEEWAY":               "auth.leeway",
 	"AUTH_BCRYPT_COST":          "auth.bcrypt_cost",
 }
 
@@ -206,6 +221,9 @@ func Validate(cfg Config) error {
 	}
 	if cfg.App.Env == "production" && cfg.Auth.BcryptCost < productionBcryptCostFloor {
 		return fmt.Errorf("invalid configuration: auth.bcrypt_cost must be at least %d in production", productionBcryptCostFloor)
+	}
+	if cfg.App.Env != "development" && cfg.Auth.Secret == developmentSigningKey {
+		return errors.New("invalid configuration: auth.secret must not be the development default outside development")
 	}
 	return nil
 }

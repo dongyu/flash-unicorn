@@ -13,19 +13,21 @@ import (
 )
 
 type NoteHandler struct {
-	uc       usecase.NoteUseCase
-	validate *validator.Validate
+	uc          usecase.NoteUseCase
+	validate    *validator.Validate
+	requireAuth fiber.Handler
 }
 
-func NewNoteHandler(uc usecase.NoteUseCase, validate *validator.Validate) *NoteHandler {
+func NewNoteHandler(uc usecase.NoteUseCase, validate *validator.Validate, requireAuth fiber.Handler) *NoteHandler {
 	return &NoteHandler{
-		uc:       uc,
-		validate: validate,
+		uc:          uc,
+		validate:    validate,
+		requireAuth: requireAuth,
 	}
 }
 
 func (h *NoteHandler) RegisterRoutes(api fiber.Router) {
-	notes := api.Group("/notes")
+	notes := api.Group("/notes", h.requireAuth)
 	notes.Post("/", h.Create)
 	notes.Get("/", h.List)
 	notes.Get("/:id", h.GetByID)

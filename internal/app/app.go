@@ -12,6 +12,7 @@ import (
 
 	httpadapter "unicorn/internal/adapter/http"
 	"unicorn/internal/adapter/http/handler"
+	"unicorn/internal/adapter/http/middleware"
 	postgresrepo "unicorn/internal/adapter/repo/postgres"
 	queueadapter "unicorn/internal/adapter/repo/queue"
 	sqliterepo "unicorn/internal/adapter/repo/sqlite"
@@ -21,6 +22,7 @@ import (
 	"unicorn/internal/platform/config"
 	"unicorn/internal/platform/database"
 	"unicorn/internal/platform/queue"
+	"unicorn/internal/platform/security"
 	"unicorn/internal/platform/telemetry"
 	"unicorn/internal/usecase"
 )
@@ -37,6 +39,10 @@ type Application struct {
 }
 
 func New(ctx context.Context, cfg config.Config, log zerolog.Logger, opts ...Option) (*Application, error) {
+	if cfg.Auth.Secret == "" {
+		return nil, errors.New("auth.secret must not be empty")
+	}
+
 	deps := resolveDeps(opts)
 	bi := buildinfo.Get()
 	flushSentry, err := telemetry.InitSentry(cfg.Sentry, cfg.App.Env, bi)
@@ -80,11 +86,33 @@ func New(ctx context.Context, cfg config.Config, log zerolog.Logger, opts ...Opt
 	var httpServer *fiber.App
 	if cfg.Server.Mode == config.ModeAll || cfg.Server.Mode == config.ModeAPI {
 		validate := handler.NewValidator()
+		issuer := security.NewJWTIssuer(
+			cfg.Auth.Issuer,
+			cfg.Auth.Secret,
+			cfg.Auth.AccessTTL,
+			cfg.Auth.Leeway,
+			deps.Clock,
+			deps.IDGenerator,
+		)
+		authUC, err := usecase.NewAuthUseCase(
+			pers.users,
+			security.NewBcryptHasher(cfg.Auth.BcryptCost),
+			issuer,
+			deps.Clock,
+		)
+		if err != nil {
+			_ = db.Close()
+			flushSentry()
+			return nil, fmt.Errorf("build auth use case: %w", err)
+		}
+
+		requireAuth := middleware.RequireAuth(issuer)
 		httpServer = httpadapter.NewRouter(httpadapter.RouterDeps{
 			Logger:    log,
 			Readiness: db,
 			Routes: []httpadapter.RouteRegistrar{
-				handler.NewNoteHandler(noteUC, validate),
+				handler.NewNoteHandler(noteUC, validate, requireAuth),
+				handler.NewAuthHandler(authUC, validate, requireAuth),
 			},
 		})
 	}

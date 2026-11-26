@@ -28,6 +28,11 @@ func TestFullStack_NotesHTTPAndRiverQueue(t *testing.T) {
 	ta := testkit.NewTestApp(t)
 	ctx := context.Background()
 
+	testkit.SeedUser(t, ta, testkit.SeedUserParams{Email: "user@example.com", Password: loginPasswordFixture})
+	login := loginUser(t, ta, "user@example.com", loginPasswordFixture)
+	require.Equal(t, http.StatusOK, login.StatusCode)
+	token := login.Data.AccessToken
+
 	healthRes := testkit.DoJSON[any, map[string]string](t, ta.HTTP, http.MethodGet, "/healthz", nil)
 	require.Equal(t, http.StatusOK, healthRes.StatusCode)
 	require.Equal(t, "ok", healthRes.Data["status"])
@@ -40,7 +45,7 @@ func TestFullStack_NotesHTTPAndRiverQueue(t *testing.T) {
 		"title": "Architecture Blueprint",
 		"body":  "Clean Architecture with Fiber v3, sqlc, and River",
 	}
-	createRes := testkit.DoJSON[map[string]string, noteResponse](t, ta.HTTP, http.MethodPost, "/api/v1/notes", &createReq)
+	createRes := testkit.DoJSONAuth[map[string]string, noteResponse](t, ta.HTTP, http.MethodPost, "/api/v1/notes", token, &createReq)
 	require.Equal(t, http.StatusCreated, createRes.StatusCode)
 	require.NotEqual(t, uuid.Nil, createRes.Data.ID)
 	require.Equal(t, "Architecture Blueprint", createRes.Data.Title)
@@ -50,7 +55,7 @@ func TestFullStack_NotesHTTPAndRiverQueue(t *testing.T) {
 	workRes := testkit.WorkSQLiteJob(ctx, t, ta, worker.NewNoteCreatedWorker(ta.App.NoteProcessor), worker.NoteCreatedArgs{NoteID: createRes.Data.ID})
 	require.Equal(t, river.EventKindJobCompleted, workRes.EventKind)
 
-	getRes := testkit.DoJSON[any, noteResponse](t, ta.HTTP, http.MethodGet, "/api/v1/notes/"+createRes.Data.ID.String(), nil)
+	getRes := testkit.DoJSONAuth[any, noteResponse](t, ta.HTTP, http.MethodGet, "/api/v1/notes/"+createRes.Data.ID.String(), token, nil)
 	require.Equal(t, http.StatusOK, getRes.StatusCode)
 	require.Equal(t, createRes.Data.ID, getRes.Data.ID)
 	require.Equal(t, "Architecture Blueprint", getRes.Data.Title)
@@ -60,7 +65,7 @@ func TestFullStack_NotesHTTPAndRiverQueue(t *testing.T) {
 		Limit  int            `json:"limit"`
 		Offset int            `json:"offset"`
 	}
-	listRes := testkit.DoJSON[any, listResp](t, ta.HTTP, http.MethodGet, "/api/v1/notes?limit=10&offset=0", nil)
+	listRes := testkit.DoJSONAuth[any, listResp](t, ta.HTTP, http.MethodGet, "/api/v1/notes?limit=10&offset=0", token, nil)
 	require.Equal(t, http.StatusOK, listRes.StatusCode)
 	require.Len(t, listRes.Data.Items, 1)
 	require.Equal(t, 10, listRes.Data.Limit)
@@ -76,12 +81,17 @@ func TestFullStack_InjectedClockAndIDGeneratorDriveNoteCreation(t *testing.T) {
 		testkit.WithIDGenerator(&testkit.SeqIDGenerator{}),
 	)
 
+	testkit.SeedUser(t, ta, testkit.SeedUserParams{Email: "user@example.com", Password: loginPasswordFixture})
+	login := loginUser(t, ta, "user@example.com", loginPasswordFixture)
+	require.Equal(t, http.StatusOK, login.StatusCode)
+	token := login.Data.AccessToken
+
 	createReq := map[string]string{
 		"title": "Clock Seam",
 		"body":  "created_at comes from the injected clock",
 	}
-	createRes := testkit.DoJSON[map[string]string, noteResponse](t, ta.HTTP, http.MethodPost, "/api/v1/notes", &createReq)
+	createRes := testkit.DoJSONAuth[map[string]string, noteResponse](t, ta.HTTP, http.MethodPost, "/api/v1/notes", token, &createReq)
 	require.Equal(t, http.StatusCreated, createRes.StatusCode)
-	require.Equal(t, uuid.MustParse("00000000-0000-7000-8000-000000000001"), createRes.Data.ID)
+	require.Equal(t, uuid.MustParse("00000000-0000-7000-8000-000000000002"), createRes.Data.ID)
 	require.True(t, fixedNow.Equal(createRes.Data.CreatedAt), "created_at = %s, want %s", createRes.Data.CreatedAt, fixedNow)
 }

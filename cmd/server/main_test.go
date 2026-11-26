@@ -21,6 +21,7 @@ func TestRunSeedUser_CreatesUserFromStdin(t *testing.T) {
 	t.Setenv("APP_ENV", "test")
 	t.Setenv("DATABASE_URL", "sqlite://"+dbPath)
 	t.Setenv("AUTH_BCRYPT_COST", "4")
+	t.Setenv("AUTH_SECRET", "cli-test-signing-key-0123456789ab")
 	t.Setenv("CONFIG_FILE", "")
 
 	ctx := context.Background()
@@ -55,6 +56,7 @@ func TestRunSeedUser_ExistingEmailFails(t *testing.T) {
 	t.Setenv("APP_ENV", "test")
 	t.Setenv("DATABASE_URL", "sqlite://"+dbPath)
 	t.Setenv("AUTH_BCRYPT_COST", "4")
+	t.Setenv("AUTH_SECRET", "cli-test-signing-key-0123456789ab")
 	t.Setenv("CONFIG_FILE", "")
 
 	ctx := context.Background()
@@ -73,6 +75,7 @@ func TestRunSeedUser_ExistingEmailFails(t *testing.T) {
 func TestRunSeedUser_RejectsPasswordFlag(t *testing.T) {
 	t.Setenv("APP_ENV", "test")
 	t.Setenv("AUTH_BCRYPT_COST", "4")
+	t.Setenv("AUTH_SECRET", "cli-test-signing-key-0123456789ab")
 	t.Setenv("CONFIG_FILE", "")
 
 	err := run([]string{
@@ -88,6 +91,7 @@ func TestRunSeedUser_RequiresPasswordOnStdin(t *testing.T) {
 	t.Setenv("APP_ENV", "test")
 	t.Setenv("DATABASE_URL", "sqlite://"+dbPath)
 	t.Setenv("AUTH_BCRYPT_COST", "4")
+	t.Setenv("AUTH_SECRET", "cli-test-signing-key-0123456789ab")
 	t.Setenv("CONFIG_FILE", "")
 
 	ctx := context.Background()
