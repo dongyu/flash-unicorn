@@ -63,6 +63,8 @@ type AuthConfig struct {
 	BcryptCost int `koanf:"bcrypt_cost" validate:"gte=4,lte=14"`
 }
 
+const productionBcryptCostFloor = 10
+
 type SentryConfig struct {
 	DSN              string        `koanf:"dsn"`
 	Environment      string        `koanf:"environment"`
@@ -201,6 +203,9 @@ func Validate(cfg Config) error {
 		!strings.HasPrefix(cfg.Database.URL, "postgresql://") &&
 		!strings.HasPrefix(cfg.Database.URL, "sqlite://") {
 		return errors.New("invalid configuration: database.url must start with postgres://, postgresql://, or sqlite://")
+	}
+	if cfg.App.Env == "production" && cfg.Auth.BcryptCost < productionBcryptCostFloor {
+		return fmt.Errorf("invalid configuration: auth.bcrypt_cost must be at least %d in production", productionBcryptCostFloor)
 	}
 	return nil
 }

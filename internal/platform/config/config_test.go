@@ -31,6 +31,8 @@ log:
   format: json
 river:
   max_workers: 25
+auth:
+  bcrypt_cost: 12
 sentry:
   dsn: "https://examplePublicKey@o0.ingest.sentry.io/0"
   enable_tracing: true
@@ -85,6 +87,26 @@ func TestLoad_AuthBcryptCostFromEnv(t *testing.T) {
 	cfg, err := config.Load(config.LoadOptions{
 		EnvironFunc: func() []string {
 			return []string{"AUTH_BCRYPT_COST=10"}
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 10, cfg.Auth.BcryptCost)
+}
+
+func TestLoad_RejectsWeakBcryptCostInProduction(t *testing.T) {
+	_, err := config.Load(config.LoadOptions{
+		EnvironFunc: func() []string {
+			return []string{"APP_ENV=production", "AUTH_BCRYPT_COST=6"}
+		},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "auth.bcrypt_cost")
+}
+
+func TestLoad_AcceptsProductionBcryptCostAtFloor(t *testing.T) {
+	cfg, err := config.Load(config.LoadOptions{
+		EnvironFunc: func() []string {
+			return []string{"APP_ENV=production", "AUTH_BCRYPT_COST=10"}
 		},
 	})
 	require.NoError(t, err)
