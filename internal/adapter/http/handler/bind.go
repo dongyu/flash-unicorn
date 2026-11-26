@@ -77,7 +77,7 @@ func validateStruct(v *validator.Validate, target any) error {
 func formatValidationMessage(fe validator.FieldError) string {
 	switch fe.Tag() {
 	case "required":
-		return fmt.Sprintf("%s is required", fe.Field())
+		return fe.Field() + " is required"
 	case "min":
 		return fmt.Sprintf("%s must be at least %s", fe.Field(), fe.Param())
 	case "max":

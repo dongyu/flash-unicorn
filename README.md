@@ -128,7 +128,9 @@ cmd/server ─▶ internal/app ─▶ internal/adapter/{http,worker,repo,queue} 
 | `make dev` | 启动 Air 热重载开发环境 |
 | `make test` | 运行全量单元测试与零 Docker SQLite 集成测试 |
 | `make test-int` | 运行含 PostgreSQL 契约测试在内的完整测试（需设置 `TEST_POSTGRES_DSN`） |
-| `make lint` | 运行 `golangci-lint`（含 Clean Architecture `depguard` 依赖边界检查） |
+| `make lint` | 运行 `golangci-lint`（含 Clean Architecture `depguard` 依赖边界检查与 `integration` build tag 代码） |
+| `make vuln` | 用 `govulncheck` 扫描依赖中的已知漏洞 |
+| `make tidy` | 校验 `go.mod` / `go.sum` 无需 tidy |
 | `make build` | 编译纯静态二进制到 `./bin/server`（注入版本元数据） |
 
 使用 Docker Compose 一键启动 `PostgreSQL + 自动迁移 + API + Worker` 全栈：

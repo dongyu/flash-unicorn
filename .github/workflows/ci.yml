@@ -24,6 +24,9 @@ jobs:
           go vet ./...
           go test -race ./...
 
+      - name: Verify go.mod and go.sum are tidy
+        run: make tidy
+
       - name: Run golangci-lint (includes Clean Architecture depguard)
         uses: golangci/golangci-lint-action@v7
         with:
@@ -31,6 +34,18 @@ jobs:
 
       - name: Verify CGO_ENABLED=0 Docker build
         run: docker build -t unicorn:ci .
+
+  vulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Scan dependencies for known vulnerabilities
+        run: make vuln
 
   postgres-contract:
     runs-on: ubuntu-latest

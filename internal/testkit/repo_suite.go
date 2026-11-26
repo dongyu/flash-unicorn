@@ -100,13 +100,13 @@ func (s *NoteRepositorySuite) TestWithinTxRollback() {
 	sentinel := errors.New("boom")
 
 	err = s.harness.TxManager.WithinTx(ctx, func(txCtx context.Context) error {
-		_, err := s.harness.NoteRepo.Create(txCtx, domain.Note{
+		_, createErr := s.harness.NoteRepo.Create(txCtx, domain.Note{
 			ID:        id,
 			Title:     "Should Rollback",
 			Body:      "never committed",
 			CreatedAt: time.Now().UTC(),
 		})
-		s.Require().NoError(err)
+		s.Require().NoError(createErr)
 		s.Require().NoError(s.harness.Enqueuer.EnqueueNoteCreated(txCtx, id))
 		return sentinel
 	})
@@ -123,14 +123,14 @@ func (s *NoteRepositorySuite) TestWithinTxNestedReuseAndCommit() {
 
 	err = s.harness.TxManager.WithinTx(ctx, func(txCtx context.Context) error {
 		return s.harness.TxManager.WithinTx(txCtx, func(nestedCtx context.Context) error {
-			_, err := s.harness.NoteRepo.Create(nestedCtx, domain.Note{
+			_, createErr := s.harness.NoteRepo.Create(nestedCtx, domain.Note{
 				ID:        id,
 				Title:     "Committed Atomically",
 				Body:      "with river job",
 				CreatedAt: time.Now().UTC(),
 			})
-			if err != nil {
-				return err
+			if createErr != nil {
+				return createErr
 			}
 			return s.harness.Enqueuer.EnqueueNoteCreated(nestedCtx, id)
 		})

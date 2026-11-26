@@ -1,7 +1,9 @@
 version: "2"
 
 run:
-  timeout: 3m
+  timeout: 5m
+  build-tags:
+    - integration
 
 formatters:
   enable:
@@ -11,18 +13,54 @@ formatters:
 linters:
   enable:
     - bodyclose
+    - copyloopvar
     - depguard
     - errcheck
+    - errname
     - errorlint
+    - exhaustive
+    - forbidigo
     - gocritic
+    - gosec
     - govet
     - ineffassign
+    - makezero
     - misspell
+    - nilerr
     - noctx
+    - nolintlint
+    - perfsprint
+    - prealloc
+    - rowserrcheck
+    - sqlclosecheck
     - staticcheck
+    - unconvert
+    - unparam
     - unused
+    - usestdlibvars
+    - wastedassign
 
   settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+    staticcheck:
+      checks:
+        - all
+        - -ST1000
+    nolintlint:
+      require-specific: true
+      allow-unused: false
+
+    forbidigo:
+      forbid:
+        - pattern: ^fmt\.Print(|f|ln)$
+          msg: use the zerolog logger inside internal/; raw printing belongs in cmd/
+
+    exhaustive:
+      default-signifies-exhaustive: true
+
     depguard:
       rules:
         domain-purity:
@@ -87,3 +125,14 @@ linters:
               desc: "usecase must not depend on app wiring"
             - pkg: "unicorn/internal/testkit"
               desc: "production usecase code must not import testkit"
+
+  exclusions:
+    generated: strict
+    rules:
+      - path: ^cmd/
+        linters:
+          - forbidigo
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

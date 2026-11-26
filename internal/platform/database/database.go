@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -74,6 +75,9 @@ func Open(ctx context.Context, cfg config.DatabaseConfig) (*DB, error) {
 			return nil, fmt.Errorf("parse postgres dsn: %w", err)
 		}
 		if cfg.MaxOpenConns > 0 {
+			if cfg.MaxOpenConns > math.MaxInt32 {
+				return nil, fmt.Errorf("max open conns %d is outside the int32 range", cfg.MaxOpenConns)
+			}
 			poolCfg.MaxConns = int32(cfg.MaxOpenConns)
 		}
 		poolCfg.MaxConnLifetime = 30 * time.Minute
@@ -127,7 +131,7 @@ func buildSQLiteDriverDSN(raw string) (string, error) {
 	if !isMemory {
 		dir := filepath.Dir(pathPart)
 		if dir != "" && dir != "." {
-			if err := os.MkdirAll(dir, 0o755); err != nil {
+			if err := os.MkdirAll(dir, 0o750); err != nil {
 				return "", fmt.Errorf("create sqlite parent dir %q: %w", dir, err)
 			}
 		}

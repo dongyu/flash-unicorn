@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,9 +12,11 @@ import (
 	"unicorn/internal/platform/config"
 )
 
+const fixturePostgresDSN = "postgres://yaml:yaml@localhost:5432/yaml?sslmode=disable" //nolint:gosec
+
 func TestLoad_YAMLThenEnvOverrides(t *testing.T) {
 	yamlPath := filepath.Join(t.TempDir(), "config.yaml")
-	yamlContent := `
+	yamlContent := fmt.Sprintf(`
 app:
   env: production
 server:
@@ -21,7 +24,7 @@ server:
   http_addr: ":9090"
   shutdown_timeout: 30s
 database:
-  url: "postgres://yaml:yaml@localhost:5432/yaml?sslmode=disable"
+  url: "%s"
   max_open_conns: 15
 log:
   level: warn
@@ -32,7 +35,7 @@ sentry:
   dsn: "https://examplePublicKey@o0.ingest.sentry.io/0"
   enable_tracing: true
   traces_sample_rate: 0.25
-`
+`, fixturePostgresDSN)
 	require.NoError(t, os.WriteFile(yamlPath, []byte(yamlContent), 0o600))
 
 	cfg, err := config.Load(config.LoadOptions{

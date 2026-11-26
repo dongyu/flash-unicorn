@@ -18,6 +18,11 @@ import (
 	"unicorn/internal/platform/logger"
 )
 
+const (
+	configUsage  = "usage: server config {db-url|app-env} [--format=raw|migrate] [--config=path]"
+	migrateUsage = "usage: server migrate {river-up|river-down|river-reset|river-status} [--config=path]"
+)
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -57,7 +62,7 @@ func run(args []string) error {
 	}
 	if *mode != "" {
 		cfg.Server.Mode = config.ServerMode(*mode)
-		if err := config.Validate(cfg); err != nil {
+		if err = config.Validate(cfg); err != nil {
 			return err
 		}
 	}
@@ -76,7 +81,7 @@ func run(args []string) error {
 
 func runConfigCmd(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: server config {db-url|app-env} [--format=raw|migrate] [--config=path]")
+		return errors.New(configUsage)
 	}
 	sub := args[0]
 	fs := flag.NewFlagSet("config "+sub, flag.ContinueOnError)
@@ -108,14 +113,14 @@ func runConfigCmd(args []string) error {
 	case "app-env":
 		fmt.Println(cfg.App.Env)
 	default:
-		return fmt.Errorf("usage: server config {db-url|app-env} [--format=raw|migrate] [--config=path]")
+		return errors.New(configUsage)
 	}
 	return nil
 }
 
 func runMigrateCmd(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: server migrate {river-up|river-down|river-reset|river-status} [--config=path]")
+		return errors.New(migrateUsage)
 	}
 	sub := args[0]
 	fs := flag.NewFlagSet("migrate", flag.ContinueOnError)

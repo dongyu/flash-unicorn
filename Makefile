@@ -5,12 +5,12 @@ GO ?= go
 LOCAL_BIN := $(CURDIR)/bin
 export PATH := $(LOCAL_BIN):$(PATH)
 
-# Pinned developer tool versions (never use @latest in engineering builds)
 SQLC_VERSION          := v1.31.1
 MOCKGEN_VERSION       := v0.6.0
 AIR_VERSION           := v1.67.4
 GOLANGCI_LINT_VERSION := v2.15.0
 MIGRATE_VERSION       := v4.20.1
+GOVULNCHECK_VERSION   := v1.10.0
 
 VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT     ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
@@ -23,7 +23,7 @@ LDFLAGS    := -s -w \
 MIGRATE_SCRIPT := ./scripts/migrate.sh
 RACE_FLAG      := $(shell command -v gcc >/dev/null 2>&1 && echo -race)
 
-.PHONY: help init tools build gen db-check migrate-up migrate-down migrate-reset migrate-status migrate-create dev run test test-int lint docker-build
+.PHONY: help init tools build gen db-check migrate-up migrate-down migrate-reset migrate-status migrate-create dev run test test-int lint vuln tidy docker-build
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -89,6 +89,13 @@ test-int: ## Run full integration tests including PostgreSQL contract suite
 
 lint: ## Run golangci-lint (includes Clean Architecture depguard rules)
 	golangci-lint run ./...
+
+vuln: ## Scan dependencies for known vulnerabilities
+	GOFLAGS=-mod=mod $(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
+
+tidy: ## Verify go.mod/go.sum need no tidy-up
+	$(GO) mod tidy
+	@git diff --exit-code -- go.mod go.sum
 
 docker-build: ## Build production multi-stage Docker image
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILD_DATE=$(BUILD_DATE) -t unicorn:latest .

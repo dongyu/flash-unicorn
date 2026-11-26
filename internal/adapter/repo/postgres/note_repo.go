@@ -3,6 +3,8 @@ package postgresrepo
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -67,10 +69,26 @@ func (r *NoteRepository) GetByID(ctx context.Context, id uuid.UUID) (domain.Note
 	return toDomainNote(row), nil
 }
 
+func toInt32(name string, v int) (int32, error) {
+	if v < math.MinInt32 || v > math.MaxInt32 {
+		return 0, fmt.Errorf("pagination %s %d is outside the int32 range: %w", name, v, domain.ErrValidation)
+	}
+	return int32(v), nil
+}
+
 func (r *NoteRepository) List(ctx context.Context, limit, offset int) ([]domain.Note, error) {
+	limit32, err := toInt32("limit", limit)
+	if err != nil {
+		return nil, err
+	}
+	offset32, err := toInt32("offset", offset)
+	if err != nil {
+		return nil, err
+	}
+
 	rows, err := r.queries(ctx).ListNotes(ctx, pggen.ListNotesParams{
-		Limit:  int32(limit),
-		Offset: int32(offset),
+		Limit:  limit32,
+		Offset: offset32,
 	})
 	if err != nil {
 		return nil, err
