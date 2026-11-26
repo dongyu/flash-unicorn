@@ -99,6 +99,7 @@ func New(ctx context.Context, cfg config.Config, log zerolog.Logger, opts ...Opt
 			security.NewBcryptHasher(cfg.Auth.BcryptCost),
 			issuer,
 			deps.Clock,
+			deps.IDGenerator,
 		)
 		if err != nil {
 			_ = db.Close()
@@ -112,7 +113,7 @@ func New(ctx context.Context, cfg config.Config, log zerolog.Logger, opts ...Opt
 			Readiness: db,
 			Routes: []httpadapter.RouteRegistrar{
 				handler.NewNoteHandler(noteUC, validate, requireAuth),
-				handler.NewAuthHandler(authUC, validate, requireAuth),
+				handler.NewAuthHandler(authUC, validate, requireAuth, cfg.Auth.RegistrationAllowed()),
 			},
 		})
 	}

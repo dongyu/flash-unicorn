@@ -30,3 +30,4 @@ auth:
   access_ttl: 15m
   leeway: 30s
   bcrypt_cost: 12
+  allow_registration: true

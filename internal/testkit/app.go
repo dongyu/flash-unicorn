@@ -71,6 +71,7 @@ func WithConfig(mutate func(cfg *config.Config)) Option {
 const testSigningKey = "unicorn-test-signing-key-00000001"
 
 func defaultTestConfig() config.Config {
+	allowRegistration := true
 	return config.Config{
 		App: config.AppConfig{Env: "test"},
 		Server: config.ServerConfig{
@@ -87,11 +88,12 @@ func defaultTestConfig() config.Config {
 			MaxWorkers: 2,
 		},
 		Auth: config.AuthConfig{
-			Issuer:     "unicorn-test",
-			Secret:     testSigningKey,
-			AccessTTL:  15 * time.Minute,
-			Leeway:     30 * time.Second,
-			BcryptCost: 4,
+			Issuer:            "unicorn-test",
+			Secret:            testSigningKey,
+			AccessTTL:         15 * time.Minute,
+			Leeway:            30 * time.Second,
+			BcryptCost:        4,
+			AllowRegistration: &allowRegistration,
 		},
 	}
 }
