@@ -1,6 +1,9 @@
 package dto
 
-import "unicorn/internal/domain"
+import (
+	"unicorn/internal/domain"
+	"unicorn/internal/usecase"
+)
 
 const TokenTypeBearer = "Bearer"
 
@@ -24,23 +27,7 @@ type LogoutRequest struct {
 	All          bool   `json:"all"`
 }
 
-type LoginResponse struct {
-	AccessToken  string           `json:"access_token"`
-	RefreshToken string           `json:"refresh_token"`
-	TokenType    string           `json:"token_type"`
-	ExpiresIn    int64            `json:"expires_in"`
-	User         AuthUserResponse `json:"user"`
-}
-
-type RegisterResponse struct {
-	AccessToken  string           `json:"access_token"`
-	RefreshToken string           `json:"refresh_token"`
-	TokenType    string           `json:"token_type"`
-	ExpiresIn    int64            `json:"expires_in"`
-	User         AuthUserResponse `json:"user"`
-}
-
-type RefreshResponse struct {
+type AuthTokenResponse struct {
 	AccessToken  string           `json:"access_token"`
 	RefreshToken string           `json:"refresh_token"`
 	TokenType    string           `json:"token_type"`
@@ -53,6 +40,16 @@ type AuthUserResponse struct {
 	DisplayName string            `json:"display_name"`
 	Role        domain.Role       `json:"role"`
 	Status      domain.UserStatus `json:"status"`
+}
+
+func ToAuthTokenResponse(result usecase.AuthResult) AuthTokenResponse {
+	return AuthTokenResponse{
+		AccessToken:  result.AccessToken.Value,
+		RefreshToken: string(result.RefreshToken),
+		TokenType:    TokenTypeBearer,
+		ExpiresIn:    result.ExpiresIn,
+		User:         ToAuthUserResponse(result.User),
+	}
 }
 
 func ToAuthUserResponse(user domain.User) AuthUserResponse {

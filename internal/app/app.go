@@ -96,7 +96,7 @@ func New(ctx context.Context, cfg config.Config, log zerolog.Logger, opts ...Opt
 		)
 		authUC, err := usecase.NewAuthUseCase(
 			pers.users,
-			pers.refreshTokens,
+			pers.refreshTokenRepo,
 			security.NewBcryptHasher(cfg.Auth.BcryptCost),
 			issuer,
 			security.NewRefreshTokenGenerator(),
@@ -224,27 +224,27 @@ func (a *Application) Run(ctx context.Context) error {
 }
 
 type persistence struct {
-	tx            domain.TxManager
-	notes         domain.NoteRepository
-	users         domain.UserRepository
-	refreshTokens domain.RefreshTokenRepository
+	tx               domain.TxManager
+	notes            domain.NoteRepository
+	users            domain.UserRepository
+	refreshTokenRepo domain.RefreshTokenRepository
 }
 
 func buildPersistence(db *database.DB) (persistence, error) {
 	switch db.Dialect {
 	case database.DialectPostgres:
 		return persistence{
-			tx:            postgresrepo.NewTxManager(db.Postgres),
-			notes:         postgresrepo.NewNoteRepository(db.Postgres),
-			users:         postgresrepo.NewUserRepository(db.Postgres),
-			refreshTokens: postgresrepo.NewRefreshTokenRepository(db.Postgres),
+			tx:               postgresrepo.NewTxManager(db.Postgres),
+			notes:            postgresrepo.NewNoteRepository(db.Postgres),
+			users:            postgresrepo.NewUserRepository(db.Postgres),
+			refreshTokenRepo: postgresrepo.NewRefreshTokenRepository(db.Postgres),
 		}, nil
 	case database.DialectSQLite:
 		return persistence{
-			tx:            sqliterepo.NewTxManager(db.SQLite),
-			notes:         sqliterepo.NewNoteRepository(db.SQLite),
-			users:         sqliterepo.NewUserRepository(db.SQLite),
-			refreshTokens: sqliterepo.NewRefreshTokenRepository(db.SQLite),
+			tx:               sqliterepo.NewTxManager(db.SQLite),
+			notes:            sqliterepo.NewNoteRepository(db.SQLite),
+			users:            sqliterepo.NewUserRepository(db.SQLite),
+			refreshTokenRepo: sqliterepo.NewRefreshTokenRepository(db.SQLite),
 		}, nil
 	default:
 		return persistence{}, fmt.Errorf("unsupported dialect %q", db.Dialect)

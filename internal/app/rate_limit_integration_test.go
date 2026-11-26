@@ -77,7 +77,7 @@ func TestAuth_RateLimitLeavesNonCredentialRoutesAlone(t *testing.T) {
 	)
 	require.Equal(t, http.StatusOK, notes.StatusCode)
 
-	refresh := testkit.DoJSON[dto.RefreshRequest, dto.RefreshResponse](
+	refresh := testkit.DoJSON[dto.RefreshRequest, dto.AuthTokenResponse](
 		t, ta.HTTP, http.MethodPost, "/api/v1/auth/refresh",
 		&dto.RefreshRequest{RefreshToken: login.Data.RefreshToken},
 	)

@@ -69,7 +69,7 @@ func TestAuth_LogsNeverCarryCredentialsOrEmail(t *testing.T) {
 	register := registerUser(t, ta, dto.RegisterRequest{Email: registeredCanaryMail, Password: canaryPassword})
 	require.Equal(t, http.StatusCreated, register.StatusCode)
 
-	refresh := testkit.DoJSON[dto.RefreshRequest, dto.RefreshResponse](
+	refresh := testkit.DoJSON[dto.RefreshRequest, dto.AuthTokenResponse](
 		t, ta.HTTP, http.MethodPost, "/api/v1/auth/refresh",
 		&dto.RefreshRequest{RefreshToken: register.Data.RefreshToken},
 	)

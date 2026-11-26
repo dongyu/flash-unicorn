@@ -62,13 +62,7 @@ func (h *AuthHandler) Register(c fiber.Ctx) error {
 		return err
 	}
 
-	return c.Status(http.StatusCreated).JSON(dto.RegisterResponse{
-		AccessToken:  result.AccessToken.Value,
-		RefreshToken: string(result.RefreshToken),
-		TokenType:    dto.TokenTypeBearer,
-		ExpiresIn:    result.ExpiresIn,
-		User:         dto.ToAuthUserResponse(result.User),
-	})
+	return c.Status(http.StatusCreated).JSON(dto.ToAuthTokenResponse(result))
 }
 
 func (h *AuthHandler) Login(c fiber.Ctx) error {
@@ -88,13 +82,7 @@ func (h *AuthHandler) Login(c fiber.Ctx) error {
 		return err
 	}
 
-	return c.Status(http.StatusOK).JSON(dto.LoginResponse{
-		AccessToken:  result.AccessToken.Value,
-		RefreshToken: string(result.RefreshToken),
-		TokenType:    dto.TokenTypeBearer,
-		ExpiresIn:    result.ExpiresIn,
-		User:         dto.ToAuthUserResponse(result.User),
-	})
+	return c.Status(http.StatusOK).JSON(dto.ToAuthTokenResponse(result))
 }
 
 func (h *AuthHandler) Refresh(c fiber.Ctx) error {
@@ -113,13 +101,7 @@ func (h *AuthHandler) Refresh(c fiber.Ctx) error {
 		return err
 	}
 
-	return c.Status(http.StatusOK).JSON(dto.RefreshResponse{
-		AccessToken:  result.AccessToken.Value,
-		RefreshToken: string(result.RefreshToken),
-		TokenType:    dto.TokenTypeBearer,
-		ExpiresIn:    result.ExpiresIn,
-		User:         dto.ToAuthUserResponse(result.User),
-	})
+	return c.Status(http.StatusOK).JSON(dto.ToAuthTokenResponse(result))
 }
 
 func (h *AuthHandler) Logout(c fiber.Ctx) error {

@@ -11,7 +11,7 @@ import (
 	"unicorn/internal/domain"
 )
 
-//go:generate mockgen -destination=../testkit/mocks/usecase/mock_note_usecase.go -package=usecasemock unicorn/internal/usecase NoteUseCase,NoteJobProcessor
+//go:generate mockgen -destination=../testkit/mocks/usecase/mock_note_usecase.go -package=usecasemock unicorn/internal/usecase NoteUseCase,NoteJobProcessor,AuthUseCase
 
 type CreateNoteInput struct {
 	Title string

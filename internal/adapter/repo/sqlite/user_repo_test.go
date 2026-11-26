@@ -16,20 +16,22 @@ import (
 
 func TestUserRepository_SQLiteContract(t *testing.T) {
 	suite.Run(t, &testkit.UserRepositorySuite{
-		NewHarness: func() testkit.RepoHarness {
-			ctx := context.Background()
-			dbPath := filepath.Join(t.TempDir(), "contract.db")
-			dbConn, err := database.Open(ctx, config.DatabaseConfig{
-				URL:          "sqlite://" + dbPath,
-				MaxOpenConns: 1,
-			})
-			require.NoError(t, err)
-			testkit.RunTestMigrations(t, dbConn)
+		RepoSuite: testkit.RepoSuite{
+			NewHarness: func() testkit.RepoHarness {
+				ctx := context.Background()
+				dbPath := filepath.Join(t.TempDir(), "contract.db")
+				dbConn, err := database.Open(ctx, config.DatabaseConfig{
+					URL:          "sqlite://" + dbPath,
+					MaxOpenConns: 1,
+				})
+				require.NoError(t, err)
+				testkit.RunTestMigrations(t, dbConn)
 
-			return testkit.RepoHarness{
-				UserRepo: sqliterepo.NewUserRepository(dbConn.SQLite),
-				Cleanup:  func() { _ = dbConn.Close() },
-			}
+				return testkit.RepoHarness{
+					UserRepo: sqliterepo.NewUserRepository(dbConn.SQLite),
+					Cleanup:  func() { _ = dbConn.Close() },
+				}
+			},
 		},
 	})
 }

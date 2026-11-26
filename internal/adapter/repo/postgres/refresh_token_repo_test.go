@@ -24,27 +24,29 @@ func TestRefreshTokenRepository_PostgresContract(t *testing.T) {
 	}
 
 	suite.Run(t, &testkit.RefreshTokenRepositorySuite{
-		NewHarness: func() testkit.RepoHarness {
-			ctx := context.Background()
-			dbConn, err := database.Open(ctx, config.DatabaseConfig{
-				URL:          dsn,
-				MaxOpenConns: 5,
-			})
-			require.NoError(t, err)
-			testkit.RunTestMigrations(t, dbConn)
+		RepoSuite: testkit.RepoSuite{
+			NewHarness: func() testkit.RepoHarness {
+				ctx := context.Background()
+				dbConn, err := database.Open(ctx, config.DatabaseConfig{
+					URL:          dsn,
+					MaxOpenConns: 5,
+				})
+				require.NoError(t, err)
+				testkit.RunTestMigrations(t, dbConn)
 
-			_, err = dbConn.Postgres.Exec(ctx, "TRUNCATE TABLE refresh_tokens, users, notes, river_job RESTART IDENTITY CASCADE")
-			require.NoError(t, err)
+				_, err = dbConn.Postgres.Exec(ctx, "TRUNCATE TABLE refresh_tokens, users, notes, river_job RESTART IDENTITY CASCADE")
+				require.NoError(t, err)
 
-			return testkit.RepoHarness{
-				UserRepo:         postgresrepo.NewUserRepository(dbConn.Postgres),
-				RefreshTokenRepo: postgresrepo.NewRefreshTokenRepository(dbConn.Postgres),
-				DeleteUser: func(userID uuid.UUID) error {
-					_, execErr := dbConn.Postgres.Exec(ctx, "DELETE FROM users WHERE id = $1", userID)
-					return execErr
-				},
-				Cleanup: func() { _ = dbConn.Close() },
-			}
+				return testkit.RepoHarness{
+					UserRepo:         postgresrepo.NewUserRepository(dbConn.Postgres),
+					RefreshTokenRepo: postgresrepo.NewRefreshTokenRepository(dbConn.Postgres),
+					DeleteUser: func(userID uuid.UUID) error {
+						_, execErr := dbConn.Postgres.Exec(ctx, "DELETE FROM users WHERE id = $1", userID)
+						return execErr
+					},
+					Cleanup: func() { _ = dbConn.Close() },
+				}
+			},
 		},
 	})
 }
