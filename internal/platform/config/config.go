@@ -236,8 +236,5 @@ func Validate(cfg Config) error {
 	if cfg.App.Env != "development" && cfg.Auth.Secret == developmentSigningKey {
 		return errors.New("invalid configuration: auth.secret must not be the development default outside development")
 	}
-	if cfg.App.Env == "production" && !cfg.Auth.RegistrationAllowed() {
-		return errors.New("invalid configuration: auth.allow_registration must be explicitly enabled in production")
-	}
 	return nil
 }

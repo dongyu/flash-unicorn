@@ -215,8 +215,8 @@ func TestLoad_RegistrationEnabledByDefaultOutsideProduction(t *testing.T) {
 	require.True(t, cfg.Auth.RegistrationAllowed())
 }
 
-func TestLoad_RejectsProductionWithoutExplicitRegistration(t *testing.T) {
-	_, err := config.Load(config.LoadOptions{
+func TestLoad_RegistrationDisabledByDefaultInProduction(t *testing.T) {
+	cfg, err := config.Load(config.LoadOptions{
 		EnvironFunc: func() []string {
 			return []string{
 				"APP_ENV=production",
@@ -225,8 +225,8 @@ func TestLoad_RejectsProductionWithoutExplicitRegistration(t *testing.T) {
 			}
 		},
 	})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "auth.allow_registration")
+	require.NoError(t, err)
+	require.False(t, cfg.Auth.RegistrationAllowed())
 }
 
 func TestLoad_AcceptsProductionRegistrationExplicitlyEnabled(t *testing.T) {
