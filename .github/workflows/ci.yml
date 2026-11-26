@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Check PostgreSQL & SQLite migration parity
+        run: make db-check
+
+      - name: Vet and run unit + SQLite integration tests
+        run: |
+          go vet ./...
+          go test -race ./...
+
+      - name: Run golangci-lint (includes Clean Architecture depguard)
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.15.0
+
+      - name: Verify CGO_ENABLED=0 Docker build
+        run: docker build -t unicorn:ci .
+
+  postgres-contract:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: unicorn
+          POSTGRES_PASSWORD: unicorn
+          POSTGRES_DB: unicorn_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run PostgreSQL repository & River contract suite
+        env:
+          TEST_POSTGRES_DSN: postgres://unicorn:unicorn@localhost:5432/unicorn_test?sslmode=disable
+        run: go test -race -tags=integration ./internal/adapter/repo/postgres/...

@@ -1,0 +1,25 @@
+app:
+  env: production
+
+server:
+  mode: all
+  http_addr: ":8080"
+  shutdown_timeout: 15s
+
+database:
+  url: "postgres://unicorn:unicorn@postgres:5432/unicorn?sslmode=disable"
+  max_open_conns: 20
+
+log:
+  level: info
+  format: json
+
+river:
+  max_workers: 20
+
+sentry:
+  dsn: ""
+  environment: production
+  enable_tracing: true
+  traces_sample_rate: 0.1
+  flush_timeout: 2s

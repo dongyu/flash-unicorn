@@ -1,0 +1,11 @@
+.git
+.env
+tmp/
+bin/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite*
+coverage.out
+docs/
+.agents/

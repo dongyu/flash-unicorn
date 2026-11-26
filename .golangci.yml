@@ -1,0 +1,89 @@
+version: "2"
+
+run:
+  timeout: 3m
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+linters:
+  enable:
+    - bodyclose
+    - depguard
+    - errcheck
+    - errorlint
+    - gocritic
+    - govet
+    - ineffassign
+    - misspell
+    - noctx
+    - staticcheck
+    - unused
+
+  settings:
+    depguard:
+      rules:
+        domain-purity:
+          files:
+            - "**/internal/domain/**/*.go"
+          deny:
+            - pkg: "github.com/gofiber/"
+              desc: "domain must not depend on HTTP framework"
+            - pkg: "github.com/riverqueue/"
+              desc: "domain must not depend on River queue"
+            - pkg: "github.com/jackc/pgx"
+              desc: "domain must not depend on database drivers"
+            - pkg: "modernc.org/sqlite"
+              desc: "domain must not depend on database drivers"
+            - pkg: "github.com/rs/zerolog"
+              desc: "domain must stay pure without logger dependencies"
+            - pkg: "github.com/knadh/koanf"
+              desc: "domain must not depend on config loaders"
+            - pkg: "github.com/golang-migrate/"
+              desc: "domain must not depend on migration tooling"
+            - pkg: "github.com/getsentry/sentry-go"
+              desc: "domain must not depend on Sentry SDK"
+            - pkg: "go.uber.org/mock"
+              desc: "domain must not depend on test mock libraries"
+            - pkg: "unicorn/internal/usecase"
+              desc: "domain is the innermost layer"
+            - pkg: "unicorn/internal/adapter"
+              desc: "domain must not depend on adapters"
+            - pkg: "unicorn/internal/platform"
+              desc: "domain must not depend on platform"
+            - pkg: "unicorn/internal/app"
+              desc: "domain must not depend on app wiring"
+            - pkg: "unicorn/internal/testkit"
+              desc: "domain must not depend on testkit"
+
+        usecase-boundary:
+          files:
+            - "**/internal/usecase/**/*.go"
+            - "!**/internal/usecase/**/*_test.go"
+          deny:
+            - pkg: "github.com/gofiber/"
+              desc: "usecase must not depend on HTTP framework"
+            - pkg: "github.com/riverqueue/"
+              desc: "usecase must not depend on River queue"
+            - pkg: "github.com/jackc/pgx"
+              desc: "usecase must not depend on database drivers"
+            - pkg: "modernc.org/sqlite"
+              desc: "usecase must not depend on database drivers"
+            - pkg: "github.com/knadh/koanf"
+              desc: "usecase must not depend on config loaders"
+            - pkg: "github.com/golang-migrate/"
+              desc: "usecase must not depend on migration tooling"
+            - pkg: "github.com/getsentry/sentry-go"
+              desc: "usecase must not depend on Sentry SDK"
+            - pkg: "go.uber.org/mock"
+              desc: "production usecase code must not import gomock"
+            - pkg: "unicorn/internal/adapter"
+              desc: "usecase must depend only on domain ports, not adapters"
+            - pkg: "unicorn/internal/platform"
+              desc: "usecase must not depend on platform implementations"
+            - pkg: "unicorn/internal/app"
+              desc: "usecase must not depend on app wiring"
+            - pkg: "unicorn/internal/testkit"
+              desc: "production usecase code must not import testkit"

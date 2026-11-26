@@ -1,0 +1,49 @@
+version: "2"
+sql:
+  - name: postgres
+    engine: "postgresql"
+    schema: "db/postgres/migrations"
+    queries: "db/postgres/queries"
+    # Optional: set DATABASE_URL when running `sqlc vet` against a live database.
+    # database:
+    #   uri: ${DATABASE_URL}
+    gen:
+      go:
+        package: "pggen"
+        out: "internal/adapter/repo/postgres/gen"
+        sql_package: "pgx/v5"
+        emit_interface: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+          - db_type: "timestamptz"
+            go_type:
+              import: "time"
+              type: "Time"
+          - db_type: "pg_catalog.timestamptz"
+            go_type:
+              import: "time"
+              type: "Time"
+
+  - name: sqlite
+    engine: "sqlite"
+    schema: "db/sqlite/migrations"
+    queries: "db/sqlite/queries"
+    gen:
+      go:
+        package: "sqlitegen"
+        out: "internal/adapter/repo/sqlite/gen"
+        emit_interface: true
+        emit_empty_slices: true
+        overrides:
+          - column: "notes.id"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+          - db_type: "datetime"
+            go_type:
+              import: "time"
+              type: "Time"
