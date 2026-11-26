@@ -23,6 +23,18 @@ type HTTPResult[T any] struct {
 
 func DoJSON[Req any, Res any](t *testing.T, app *fiber.App, method, target string, body *Req) HTTPResult[Res] {
 	t.Helper()
+	return doJSON[Req, Res](t, app, method, target, nil, body)
+}
+
+func DoJSONAuth[Req any, Res any](t *testing.T, app *fiber.App, method, target, accessToken string, body *Req) HTTPResult[Res] {
+	t.Helper()
+	return doJSON[Req, Res](t, app, method, target, map[string]string{
+		fiber.HeaderAuthorization: AuthHeader(accessToken),
+	}, body)
+}
+
+func doJSON[Req any, Res any](t *testing.T, app *fiber.App, method, target string, headers map[string]string, body *Req) HTTPResult[Res] {
+	t.Helper()
 
 	var reader io.Reader
 	if body != nil {
@@ -34,6 +46,9 @@ func DoJSON[Req any, Res any](t *testing.T, app *fiber.App, method, target strin
 	req := httptest.NewRequestWithContext(t.Context(), method, target, reader)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	for key, value := range headers {
+		req.Header.Set(key, value)
 	}
 
 	resp, err := app.Test(req)

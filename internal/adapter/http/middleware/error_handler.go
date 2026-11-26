@@ -31,6 +31,10 @@ func NewErrorHandler() fiber.ErrorHandler {
 			}
 		}
 
+		if problem.Status == http.StatusUnauthorized {
+			c.Set(fiber.HeaderWWWAuthenticate, "Bearer")
+		}
+
 		if err := c.Status(problem.Status).JSON(problem); err != nil {
 			return err
 		}

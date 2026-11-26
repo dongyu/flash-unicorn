@@ -62,6 +62,14 @@ func WithIDGenerator(idGen domain.IDGenerator) Option {
 	}
 }
 
+func WithConfig(mutate func(cfg *config.Config)) Option {
+	return func(o *Options) {
+		mutate(&o.Config)
+	}
+}
+
+const testSigningKey = "unicorn-test-signing-key-00000001"
+
 func defaultTestConfig() config.Config {
 	return config.Config{
 		App: config.AppConfig{Env: "test"},
@@ -79,6 +87,10 @@ func defaultTestConfig() config.Config {
 			MaxWorkers: 2,
 		},
 		Auth: config.AuthConfig{
+			Issuer:     "unicorn-test",
+			Secret:     testSigningKey,
+			AccessTTL:  15 * time.Minute,
+			Leeway:     30 * time.Second,
 			BcryptCost: 4,
 		},
 	}

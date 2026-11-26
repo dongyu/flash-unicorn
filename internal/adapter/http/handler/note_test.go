@@ -24,6 +24,10 @@ import (
 	"unicorn/internal/usecase"
 )
 
+func allowRequest(c fiber.Ctx) error {
+	return c.Next()
+}
+
 func newTestNoteRouter(t *testing.T) (*fiber.App, *usecasemock.MockNoteUseCase) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
@@ -31,7 +35,7 @@ func newTestNoteRouter(t *testing.T) (*fiber.App, *usecasemock.MockNoteUseCase) 
 	app := httpadapter.NewRouter(httpadapter.RouterDeps{
 		Logger: zerolog.New(io.Discard),
 		Routes: []httpadapter.RouteRegistrar{
-			handler.NewNoteHandler(mockUC, handler.NewValidator()),
+			handler.NewNoteHandler(mockUC, handler.NewValidator(), allowRequest),
 		},
 	})
 	return app, mockUC
