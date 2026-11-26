@@ -116,7 +116,13 @@ func New(ctx context.Context, cfg config.Config, log zerolog.Logger, opts ...Opt
 			Readiness: db,
 			Routes: []httpadapter.RouteRegistrar{
 				handler.NewNoteHandler(noteUC, validate, requireAuth),
-				handler.NewAuthHandler(authUC, validate, requireAuth, cfg.Auth.RegistrationAllowed()),
+				handler.NewAuthHandler(
+					authUC,
+					validate,
+					requireAuth,
+					middleware.NewAuthRateLimiter(),
+					cfg.Auth.RegistrationAllowed(),
+				),
 			},
 		})
 	}
