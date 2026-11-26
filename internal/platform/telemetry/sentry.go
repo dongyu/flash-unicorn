@@ -31,6 +31,7 @@ func InitSentry(cfg config.SentryConfig, appEnv string, bi buildinfo.Info) (func
 		EnableTracing:    cfg.EnableTracing,
 		TracesSampleRate: cfg.TracesSampleRate,
 		AttachStacktrace: true,
+		BeforeSend:       dropRequestBody,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("init sentry: %w", err)
@@ -39,4 +40,11 @@ func InitSentry(cfg config.SentryConfig, appEnv string, bi buildinfo.Info) (func
 	return func() {
 		sentry.Flush(cfg.FlushTimeout)
 	}, nil
+}
+
+func dropRequestBody(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
+	if event.Request != nil {
+		event.Request.Data = ""
+	}
+	return event
 }

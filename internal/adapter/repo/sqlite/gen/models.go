@@ -5,6 +5,7 @@
 package sqlitegen
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,4 +16,25 @@ type Note struct {
 	Title     string
 	Body      string
 	CreatedAt time.Time
+}
+
+type RefreshToken struct {
+	ID            uuid.UUID
+	UserID        uuid.UUID
+	TokenHash     string
+	ExpiresAt     time.Time
+	CreatedAt     time.Time
+	RevokedAt     sql.NullTime
+	RotatedFromID sql.NullString
+}
+
+type User struct {
+	ID           uuid.UUID
+	Email        string
+	PasswordHash sql.NullString
+	DisplayName  string
+	Role         string
+	Status       string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }

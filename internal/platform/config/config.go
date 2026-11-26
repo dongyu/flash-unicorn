@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -31,6 +32,7 @@ type Config struct {
 	Log      LogConfig      `koanf:"log" validate:"required"`
 	River    RiverConfig    `koanf:"river" validate:"required"`
 	Sentry   SentryConfig   `koanf:"sentry" validate:"required"`
+	Auth     AuthConfig     `koanf:"auth" validate:"required"`
 }
 
 type AppConfig struct {
@@ -56,6 +58,25 @@ type LogConfig struct {
 type RiverConfig struct {
 	MaxWorkers int `koanf:"max_workers" validate:"gte=1"`
 }
+
+type AuthConfig struct {
+	Issuer            string        `koanf:"issuer" validate:"required"`
+	Secret            string        `koanf:"secret" validate:"required,min=32"`
+	AccessTTL         time.Duration `koanf:"access_ttl" validate:"required,gt=0"`
+	RefreshTTL        time.Duration `koanf:"refresh_ttl" validate:"required,gt=0"`
+	Leeway            time.Duration `koanf:"leeway" validate:"gte=0"`
+	BcryptCost        int           `koanf:"bcrypt_cost" validate:"gte=4,lte=14"`
+	AllowRegistration *bool         `koanf:"allow_registration"`
+}
+
+func (c AuthConfig) RegistrationAllowed() bool {
+	return c.AllowRegistration != nil && *c.AllowRegistration
+}
+
+const (
+	productionBcryptCostFloor = 10
+	developmentSigningKey     = "unicorn-development-signing-key-0001"
+)
 
 type SentryConfig struct {
 	DSN              string        `koanf:"dsn"`
@@ -99,6 +120,14 @@ func defaultConfig() Config {
 			TracesSampleRate: 0,
 			FlushTimeout:     2 * time.Second,
 		},
+		Auth: AuthConfig{
+			Issuer:     "unicorn",
+			Secret:     developmentSigningKey,
+			AccessTTL:  15 * time.Minute,
+			RefreshTTL: 720 * time.Hour,
+			Leeway:     30 * time.Second,
+			BcryptCost: 4,
+		},
 	}
 }
 
@@ -117,6 +146,13 @@ var flatEnvMapping = map[string]string{
 	"SENTRY_ENABLE_TRACING":     "sentry.enable_tracing",
 	"SENTRY_TRACES_SAMPLE_RATE": "sentry.traces_sample_rate",
 	"SENTRY_FLUSH_TIMEOUT":      "sentry.flush_timeout",
+	"AUTH_ISSUER":               "auth.issuer",
+	"AUTH_SECRET":               "auth.secret",
+	"AUTH_ACCESS_TTL":           "auth.access_ttl",
+	"AUTH_REFRESH_TTL":          "auth.refresh_ttl",
+	"AUTH_LEEWAY":               "auth.leeway",
+	"AUTH_BCRYPT_COST":          "auth.bcrypt_cost",
+	"AUTH_ALLOW_REGISTRATION":   "auth.allow_registration",
 }
 
 func Load(opts LoadOptions) (Config, error) {
@@ -169,6 +205,11 @@ func Load(opts LoadOptions) (Config, error) {
 		return Config{}, fmt.Errorf("unmarshal config: %w", err)
 	}
 
+	if cfg.Auth.AllowRegistration == nil {
+		allowRegistration := cfg.App.Env != "production"
+		cfg.Auth.AllowRegistration = &allowRegistration
+	}
+
 	if err := Validate(cfg); err != nil {
 		return Config{}, err
 	}
@@ -177,6 +218,13 @@ func Load(opts LoadOptions) (Config, error) {
 
 func Validate(cfg Config) error {
 	v := validator.New(validator.WithRequiredStructEnabled())
+	v.RegisterTagNameFunc(func(fld reflect.StructField) string {
+		name := strings.SplitN(fld.Tag.Get("koanf"), ",", 2)[0]
+		if name == "" || name == "-" {
+			return fld.Name
+		}
+		return name
+	})
 	if err := v.Struct(cfg); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
@@ -184,6 +232,12 @@ func Validate(cfg Config) error {
 		!strings.HasPrefix(cfg.Database.URL, "postgresql://") &&
 		!strings.HasPrefix(cfg.Database.URL, "sqlite://") {
 		return errors.New("invalid configuration: database.url must start with postgres://, postgresql://, or sqlite://")
+	}
+	if cfg.App.Env == "production" && cfg.Auth.BcryptCost < productionBcryptCostFloor {
+		return fmt.Errorf("invalid configuration: auth.bcrypt_cost must be at least %d in production", productionBcryptCostFloor)
+	}
+	if cfg.App.Env != "development" && cfg.Auth.Secret == developmentSigningKey {
+		return errors.New("invalid configuration: auth.secret must not be the development default outside development")
 	}
 	return nil
 }

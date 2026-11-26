@@ -27,27 +27,29 @@ func TestNoteRepository_PostgresContract(t *testing.T) {
 	}
 
 	suite.Run(t, &testkit.NoteRepositorySuite{
-		NewHarness: func() testkit.RepoHarness {
-			ctx := context.Background()
-			dbConn, err := database.Open(ctx, config.DatabaseConfig{
-				URL:          dsn,
-				MaxOpenConns: 5,
-			})
-			require.NoError(t, err)
-			testkit.RunTestMigrations(t, dbConn)
+		RepoSuite: testkit.RepoSuite{
+			NewHarness: func() testkit.RepoHarness {
+				ctx := context.Background()
+				dbConn, err := database.Open(ctx, config.DatabaseConfig{
+					URL:          dsn,
+					MaxOpenConns: 5,
+				})
+				require.NoError(t, err)
+				testkit.RunTestMigrations(t, dbConn)
 
-			_, err = dbConn.Postgres.Exec(ctx, "TRUNCATE TABLE notes, river_job RESTART IDENTITY CASCADE")
-			require.NoError(t, err)
+				_, err = dbConn.Postgres.Exec(ctx, "TRUNCATE TABLE notes, river_job RESTART IDENTITY CASCADE")
+				require.NoError(t, err)
 
-			riverClient, err := queue.NewClient(dbConn, config.RiverConfig{MaxWorkers: 1}, nil, zerolog.New(io.Discard), false)
-			require.NoError(t, err)
+				riverClient, err := queue.NewClient(dbConn, config.RiverConfig{MaxWorkers: 1}, nil, zerolog.New(io.Discard), false)
+				require.NoError(t, err)
 
-			return testkit.RepoHarness{
-				TxManager: postgresrepo.NewTxManager(dbConn.Postgres),
-				NoteRepo:  postgresrepo.NewNoteRepository(dbConn.Postgres),
-				Enqueuer:  queueadapter.NewEnqueuer(riverClient),
-				Cleanup:   func() { _ = dbConn.Close() },
-			}
+				return testkit.RepoHarness{
+					TxManager: postgresrepo.NewTxManager(dbConn.Postgres),
+					NoteRepo:  postgresrepo.NewNoteRepository(dbConn.Postgres),
+					Enqueuer:  queueadapter.NewEnqueuer(riverClient),
+					Cleanup:   func() { _ = dbConn.Close() },
+				}
+			},
 		},
 	})
 }

@@ -85,6 +85,10 @@ linters:
               desc: "domain must not depend on Sentry SDK"
             - pkg: "go.uber.org/mock"
               desc: "domain must not depend on test mock libraries"
+            - pkg: "github.com/golang-jwt/"
+              desc: "domain must not depend on JWT libraries"
+            - pkg: "golang.org/x/crypto"
+              desc: "domain must not depend on cryptography implementations"
             - pkg: "unicorn/internal/usecase"
               desc: "domain is the innermost layer"
             - pkg: "unicorn/internal/adapter"
@@ -95,6 +99,10 @@ linters:
               desc: "domain must not depend on app wiring"
             - pkg: "unicorn/internal/testkit"
               desc: "domain must not depend on testkit"
+            - pkg: "unicorn/internal/bootstrap"
+              desc: "domain must not depend on composition wiring"
+            - pkg: "unicorn/internal/seed"
+              desc: "domain must not depend on seed tooling"
 
         usecase-boundary:
           files:
@@ -117,6 +125,8 @@ linters:
               desc: "usecase must not depend on Sentry SDK"
             - pkg: "go.uber.org/mock"
               desc: "production usecase code must not import gomock"
+            - pkg: "github.com/golang-jwt/"
+              desc: "usecase must not depend on JWT libraries"
             - pkg: "unicorn/internal/adapter"
               desc: "usecase must depend only on domain ports, not adapters"
             - pkg: "unicorn/internal/platform"
@@ -125,6 +135,10 @@ linters:
               desc: "usecase must not depend on app wiring"
             - pkg: "unicorn/internal/testkit"
               desc: "production usecase code must not import testkit"
+            - pkg: "unicorn/internal/bootstrap"
+              desc: "usecase must not depend on composition wiring"
+            - pkg: "unicorn/internal/seed"
+              desc: "usecase must not depend on seed tooling"
 
   exclusions:
     generated: strict

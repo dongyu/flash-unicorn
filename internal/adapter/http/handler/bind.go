@@ -12,6 +12,12 @@ import (
 	"unicorn/internal/domain"
 )
 
+const (
+	passwordLengthTag = "passwordlen"
+	minPasswordBytes  = 8
+	maxPasswordBytes  = 72
+)
+
 func NewValidator() *validator.Validate {
 	v := validator.New(validator.WithRequiredStructEnabled())
 	v.RegisterTagNameFunc(func(fld reflect.StructField) string {
@@ -25,7 +31,15 @@ func NewValidator() *validator.Validate {
 		}
 		return fld.Name
 	})
+	if err := v.RegisterValidation(passwordLengthTag, passwordLengthWithinBounds); err != nil {
+		panic(fmt.Sprintf("register %s validation: %v", passwordLengthTag, err))
+	}
 	return v
+}
+
+func passwordLengthWithinBounds(fl validator.FieldLevel) bool {
+	length := len(fl.Field().String())
+	return length >= minPasswordBytes && length <= maxPasswordBytes
 }
 
 func BindBodyAndValidate[T any](c fiber.Ctx, v *validator.Validate) (T, error) {
@@ -82,6 +96,11 @@ func formatValidationMessage(fe validator.FieldError) string {
 		return fmt.Sprintf("%s must be at least %s", fe.Field(), fe.Param())
 	case "max":
 		return fmt.Sprintf("%s must be at most %s", fe.Field(), fe.Param())
+	case passwordLengthTag:
+		return fmt.Sprintf(
+			"%s must be between %d and %d bytes",
+			fe.Field(), minPasswordBytes, maxPasswordBytes,
+		)
 	default:
 		return fmt.Sprintf("%s failed %s validation", fe.Field(), fe.Tag())
 	}

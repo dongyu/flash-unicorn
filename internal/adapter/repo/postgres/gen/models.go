@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Note struct {
@@ -15,4 +16,25 @@ type Note struct {
 	Title     string
 	Body      string
 	CreatedAt time.Time
+}
+
+type RefreshToken struct {
+	ID            uuid.UUID
+	UserID        uuid.UUID
+	TokenHash     string
+	ExpiresAt     time.Time
+	CreatedAt     time.Time
+	RevokedAt     pgtype.Timestamptz
+	RotatedFromID pgtype.UUID
+}
+
+type User struct {
+	ID           uuid.UUID
+	Email        string
+	PasswordHash pgtype.Text
+	DisplayName  string
+	Role         string
+	Status       string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }

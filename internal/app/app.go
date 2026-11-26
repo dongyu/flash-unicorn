@@ -12,15 +12,15 @@ import (
 
 	httpadapter "unicorn/internal/adapter/http"
 	"unicorn/internal/adapter/http/handler"
-	postgresrepo "unicorn/internal/adapter/repo/postgres"
+	"unicorn/internal/adapter/http/middleware"
 	queueadapter "unicorn/internal/adapter/repo/queue"
-	sqliterepo "unicorn/internal/adapter/repo/sqlite"
 	"unicorn/internal/adapter/worker"
-	"unicorn/internal/domain"
+	"unicorn/internal/bootstrap"
 	"unicorn/internal/platform/buildinfo"
 	"unicorn/internal/platform/config"
 	"unicorn/internal/platform/database"
 	"unicorn/internal/platform/queue"
+	"unicorn/internal/platform/security"
 	"unicorn/internal/platform/telemetry"
 	"unicorn/internal/usecase"
 )
@@ -36,7 +36,12 @@ type Application struct {
 	flushSentry   func()
 }
 
-func New(ctx context.Context, cfg config.Config, log zerolog.Logger) (*Application, error) {
+func New(ctx context.Context, cfg config.Config, log zerolog.Logger, opts ...Option) (*Application, error) {
+	if cfg.Auth.Secret == "" {
+		return nil, errors.New("auth.secret must not be empty")
+	}
+
+	deps := resolveDeps(opts)
 	bi := buildinfo.Get()
 	flushSentry, err := telemetry.InitSentry(cfg.Sentry, cfg.App.Env, bi)
 	if err != nil {
@@ -49,14 +54,14 @@ func New(ctx context.Context, cfg config.Config, log zerolog.Logger) (*Applicati
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 
-	txManager, noteRepo, err := buildPersistence(db)
+	pers, err := bootstrap.OpenPersistence(db)
 	if err != nil {
 		_ = db.Close()
 		flushSentry()
 		return nil, err
 	}
 
-	noteProcessor := usecase.NewNoteJobProcessor(noteRepo)
+	noteProcessor := usecase.NewNoteJobProcessor(pers.Notes)
 	workers := worker.RegisterWorkers(noteProcessor)
 	registerWorkers := cfg.Server.Mode == config.ModeAll || cfg.Server.Mode == config.ModeWorker
 
@@ -69,21 +74,53 @@ func New(ctx context.Context, cfg config.Config, log zerolog.Logger) (*Applicati
 
 	enqueuer := queueadapter.NewEnqueuer(riverClient)
 	noteUC := usecase.NewNoteUseCase(
-		txManager,
-		noteRepo,
+		pers.Tx,
+		pers.Notes,
 		enqueuer,
-		domain.SystemClock{},
-		domain.UUIDv7Generator{},
+		deps.Clock,
+		deps.IDGenerator,
 	)
 
 	var httpServer *fiber.App
 	if cfg.Server.Mode == config.ModeAll || cfg.Server.Mode == config.ModeAPI {
 		validate := handler.NewValidator()
+		issuer := security.NewJWTIssuer(
+			cfg.Auth.Issuer,
+			cfg.Auth.Secret,
+			cfg.Auth.AccessTTL,
+			cfg.Auth.Leeway,
+			deps.Clock,
+			deps.IDGenerator,
+		)
+		authUC, err := usecase.NewAuthUseCase(
+			pers.Users,
+			pers.RefreshTokens,
+			security.NewBcryptHasher(cfg.Auth.BcryptCost),
+			issuer,
+			security.NewRefreshTokenGenerator(),
+			cfg.Auth.RefreshTTL,
+			deps.Clock,
+			deps.IDGenerator,
+		)
+		if err != nil {
+			_ = db.Close()
+			flushSentry()
+			return nil, fmt.Errorf("build auth use case: %w", err)
+		}
+
+		requireAuth := middleware.RequireAuth(issuer)
 		httpServer = httpadapter.NewRouter(httpadapter.RouterDeps{
 			Logger:    log,
 			Readiness: db,
 			Routes: []httpadapter.RouteRegistrar{
-				handler.NewNoteHandler(noteUC, validate),
+				handler.NewNoteHandler(noteUC, validate, requireAuth),
+				handler.NewAuthHandler(
+					authUC,
+					validate,
+					requireAuth,
+					middleware.NewAuthRateLimiter(),
+					cfg.Auth.RegistrationAllowed(),
+				),
 			},
 		})
 	}
@@ -182,15 +219,4 @@ func (a *Application) Run(ctx context.Context) error {
 	}
 	a.Logger.Info().Msg("shutdown complete")
 	return errors.Join(runErr, shutdownErr)
-}
-
-func buildPersistence(db *database.DB) (domain.TxManager, domain.NoteRepository, error) {
-	switch db.Dialect {
-	case database.DialectPostgres:
-		return postgresrepo.NewTxManager(db.Postgres), postgresrepo.NewNoteRepository(db.Postgres), nil
-	case database.DialectSQLite:
-		return sqliterepo.NewTxManager(db.SQLite), sqliterepo.NewNoteRepository(db.SQLite), nil
-	default:
-		return nil, nil, fmt.Errorf("unsupported dialect %q", db.Dialect)
-	}
 }
