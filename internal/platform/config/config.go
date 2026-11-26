@@ -78,7 +78,7 @@ func defaultConfig() Config {
 		},
 		Server: ServerConfig{
 			Mode:            ModeAll,
-			HTTPAddr:        ":8080",
+			HTTPAddr:        ":3331",
 			ShutdownTimeout: 15 * time.Second,
 		},
 		Database: DatabaseConfig{

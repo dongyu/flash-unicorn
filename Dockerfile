@@ -43,9 +43,9 @@ RUN chmod +x ./scripts/migrate.sh
 USER app
 
 ENV SERVER_BIN=/usr/local/bin/server \
-    HTTP_ADDR=:8080 \
+    HTTP_ADDR=:3331 \
     SERVER_MODE=all
 
-EXPOSE 8080
+EXPOSE 3331
 
 ENTRYPOINT ["/usr/local/bin/server"]

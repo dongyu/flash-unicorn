@@ -3,7 +3,7 @@ app:
 
 server:
   mode: all
-  http_addr: ":8080"
+  http_addr: ":3331"
   shutdown_timeout: 15s
 
 database:
