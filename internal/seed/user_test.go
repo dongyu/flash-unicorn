@@ -1,4 +1,4 @@
-package usecase_test
+package seed_test
 
 import (
 	"context"
@@ -10,18 +10,18 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"unicorn/internal/domain"
+	"unicorn/internal/seed"
 	"unicorn/internal/testkit"
 	domainmock "unicorn/internal/testkit/mocks/domain"
-	"unicorn/internal/usecase"
 )
 
-func TestSeedUserUseCase_CreatesActiveUserWithNormalizedEmail(t *testing.T) {
+func TestSeeder_CreatesActiveUserWithNormalizedEmail(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := domainmock.NewMockUserRepository(ctrl)
 	hasher := domainmock.NewMockPasswordHasher(ctrl)
 	fixedNow := time.Date(2026, 11, 26, 3, 0, 0, 0, time.UTC)
 
-	uc := usecase.NewSeedUserUseCase(repo, hasher, testkit.NewFakeClock(fixedNow), &testkit.SeqIDGenerator{})
+	uc := seed.NewSeeder(repo, hasher, testkit.NewFakeClock(fixedNow), &testkit.SeqIDGenerator{})
 
 	repo.EXPECT().
 		GetByEmail(gomock.Any(), "admin@example.com").
@@ -42,7 +42,7 @@ func TestSeedUserUseCase_CreatesActiveUserWithNormalizedEmail(t *testing.T) {
 			return user, nil
 		})
 
-	created, err := uc.SeedUser(context.Background(), usecase.SeedUserInput{
+	created, err := uc.Create(context.Background(), seed.UserInput{
 		Email:       "  Admin@Example.COM ",
 		Password:    "s3cret",
 		Role:        domain.RoleAdmin,
@@ -54,12 +54,12 @@ func TestSeedUserUseCase_CreatesActiveUserWithNormalizedEmail(t *testing.T) {
 	require.Equal(t, domain.UserStatusActive, created.Status)
 }
 
-func TestSeedUserUseCase_DefaultsToUserRole(t *testing.T) {
+func TestSeeder_DefaultsToUserRole(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := domainmock.NewMockUserRepository(ctrl)
 	hasher := domainmock.NewMockPasswordHasher(ctrl)
 
-	uc := usecase.NewSeedUserUseCase(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
+	uc := seed.NewSeeder(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
 
 	repo.EXPECT().GetByEmail(gomock.Any(), "user@example.com").Return(domain.User{}, domain.ErrNotFound)
 	hasher.EXPECT().Hash("s3cret").Return("bcrypt-hash", nil)
@@ -70,92 +70,92 @@ func TestSeedUserUseCase_DefaultsToUserRole(t *testing.T) {
 			return user, nil
 		})
 
-	_, err := uc.SeedUser(context.Background(), usecase.SeedUserInput{
+	_, err := uc.Create(context.Background(), seed.UserInput{
 		Email:    "user@example.com",
 		Password: "s3cret",
 	})
 	require.NoError(t, err)
 }
 
-func TestSeedUserUseCase_ExistingEmailConflicts(t *testing.T) {
+func TestSeeder_ExistingEmailConflicts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := domainmock.NewMockUserRepository(ctrl)
 	hasher := domainmock.NewMockPasswordHasher(ctrl)
 
-	uc := usecase.NewSeedUserUseCase(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
+	uc := seed.NewSeeder(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
 
 	repo.EXPECT().
 		GetByEmail(gomock.Any(), "taken@example.com").
 		Return(domain.User{Email: "taken@example.com"}, nil)
 
-	_, err := uc.SeedUser(context.Background(), usecase.SeedUserInput{
+	_, err := uc.Create(context.Background(), seed.UserInput{
 		Email:    "taken@example.com",
 		Password: "s3cret",
 	})
 	require.ErrorIs(t, err, domain.ErrConflict)
 }
 
-func TestSeedUserUseCase_RepositoryConflictIsReported(t *testing.T) {
+func TestSeeder_RepositoryConflictIsReported(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := domainmock.NewMockUserRepository(ctrl)
 	hasher := domainmock.NewMockPasswordHasher(ctrl)
 
-	uc := usecase.NewSeedUserUseCase(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
+	uc := seed.NewSeeder(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
 
 	repo.EXPECT().GetByEmail(gomock.Any(), "race@example.com").Return(domain.User{}, domain.ErrNotFound)
 	hasher.EXPECT().Hash("s3cret").Return("bcrypt-hash", nil)
 	repo.EXPECT().Create(gomock.Any(), gomock.Any()).Return(domain.User{}, domain.ErrConflict)
 
-	_, err := uc.SeedUser(context.Background(), usecase.SeedUserInput{
+	_, err := uc.Create(context.Background(), seed.UserInput{
 		Email:    "race@example.com",
 		Password: "s3cret",
 	})
 	require.ErrorIs(t, err, domain.ErrConflict)
 }
 
-func TestSeedUserUseCase_RejectsInvalidInput(t *testing.T) {
+func TestSeeder_RejectsInvalidInput(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := domainmock.NewMockUserRepository(ctrl)
 	hasher := domainmock.NewMockPasswordHasher(ctrl)
 
-	uc := usecase.NewSeedUserUseCase(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
+	uc := seed.NewSeeder(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
 
-	for name, in := range map[string]usecase.SeedUserInput{
+	for name, in := range map[string]seed.UserInput{
 		"empty email":    {Password: "s3cret"},
 		"unknown role":   {Email: "user@example.com", Password: "s3cret", Role: domain.Role("owner")},
 		"unknown status": {Email: "user@example.com", Password: "s3cret", Status: domain.UserStatus("pending")},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := uc.SeedUser(context.Background(), in)
+			_, err := uc.Create(context.Background(), in)
 			require.ErrorIs(t, err, domain.ErrValidation)
 		})
 	}
 }
 
-func TestSeedUserUseCase_HasherFailurePropagates(t *testing.T) {
+func TestSeeder_HasherFailurePropagates(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := domainmock.NewMockUserRepository(ctrl)
 	hasher := domainmock.NewMockPasswordHasher(ctrl)
 	hashErr := errors.New("bcrypt unavailable")
 
-	uc := usecase.NewSeedUserUseCase(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
+	uc := seed.NewSeeder(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
 
 	repo.EXPECT().GetByEmail(gomock.Any(), "user@example.com").Return(domain.User{}, domain.ErrNotFound)
 	hasher.EXPECT().Hash("s3cret").Return("", hashErr)
 
-	_, err := uc.SeedUser(context.Background(), usecase.SeedUserInput{
+	_, err := uc.Create(context.Background(), seed.UserInput{
 		Email:    "user@example.com",
 		Password: "s3cret",
 	})
 	require.ErrorIs(t, err, hashErr)
 }
 
-func TestSeedUserUseCase_CreatesUserWithoutCredential(t *testing.T) {
+func TestSeeder_CreatesUserWithoutCredential(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := domainmock.NewMockUserRepository(ctrl)
 	hasher := domainmock.NewMockPasswordHasher(ctrl)
 
-	uc := usecase.NewSeedUserUseCase(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
+	uc := seed.NewSeeder(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
 
 	repo.EXPECT().GetByEmail(gomock.Any(), "external@example.com").Return(domain.User{}, domain.ErrNotFound)
 	repo.EXPECT().Create(gomock.Any(), gomock.Any()).
@@ -165,16 +165,16 @@ func TestSeedUserUseCase_CreatesUserWithoutCredential(t *testing.T) {
 			return user, nil
 		})
 
-	_, err := uc.SeedUser(context.Background(), usecase.SeedUserInput{Email: "external@example.com"})
+	_, err := uc.Create(context.Background(), seed.UserInput{Email: "external@example.com"})
 	require.NoError(t, err)
 }
 
-func TestSeedUserUseCase_HonoursExplicitStatus(t *testing.T) {
+func TestSeeder_HonoursExplicitStatus(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := domainmock.NewMockUserRepository(ctrl)
 	hasher := domainmock.NewMockPasswordHasher(ctrl)
 
-	uc := usecase.NewSeedUserUseCase(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
+	uc := seed.NewSeeder(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
 
 	repo.EXPECT().GetByEmail(gomock.Any(), "off@example.com").Return(domain.User{}, domain.ErrNotFound)
 	hasher.EXPECT().Hash("s3cret").Return("bcrypt-hash", nil)
@@ -184,7 +184,7 @@ func TestSeedUserUseCase_HonoursExplicitStatus(t *testing.T) {
 			return user, nil
 		})
 
-	_, err := uc.SeedUser(context.Background(), usecase.SeedUserInput{
+	_, err := uc.Create(context.Background(), seed.UserInput{
 		Email:    "off@example.com",
 		Password: "s3cret",
 		Status:   domain.UserStatusDisabled,

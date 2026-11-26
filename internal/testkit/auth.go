@@ -9,7 +9,7 @@ import (
 	"unicorn/internal/bootstrap"
 	"unicorn/internal/domain"
 	"unicorn/internal/platform/security"
-	"unicorn/internal/usecase"
+	"unicorn/internal/seed"
 )
 
 type SeedUserParams struct {
@@ -26,14 +26,12 @@ func SeedUser(t *testing.T, ta *TestApp, params SeedUserParams) domain.User {
 	pers, err := bootstrap.OpenPersistence(ta.DB)
 	require.NoError(t, err)
 
-	uc := usecase.NewSeedUserUseCase(
+	user, err := seed.NewSeeder(
 		pers.Users,
 		security.NewBcryptHasher(ta.App.Config.Auth.BcryptCost),
 		domain.SystemClock{},
 		domain.UUIDv7Generator{},
-	)
-
-	user, err := uc.SeedUser(context.Background(), usecase.SeedUserInput{
+	).Create(context.Background(), seed.UserInput{
 		Email:       params.Email,
 		Password:    params.Password,
 		Role:        params.Role,

@@ -2,6 +2,13 @@
 
 配套决策见 `docs/adr/0005-access-token-and-refresh-token.md` 与 `docs/adr/0006-users-table-is-template-infrastructure.md`。本文只写“怎么改”和“上线前检查什么”，不重复“为什么”。
 
+## 种子不是用例
+
+`internal/seed` 承载的是**开发与运维工具**，对标 Laravel 的 `database/seeders`：它负责在空库里造数据（第一个管理员、测试夹具里的各种用户形态），不是产品行为。因此它不放在 `internal/usecase`，也不被 `AuthUseCase` 引用；`cmd/server seed-user` 与 `testkit.SeedUser` 共用同一个 `seed.Seeder`。
+
+判断标准：只有产品调用方（HTTP、worker）能触发的行为才是用例。种子只能由命令行或测试触发。
+`.golangci.yml` 的 `usecase-boundary` 与 `domain-purity` 都禁止反向引用 `internal/seed` 与 `internal/bootstrap`，这条边界由 lint 强制，而不是靠约定。
+
 ## 三条扩展路径
 
 ### 1. 给 User 加一个字段
@@ -16,8 +23,8 @@
 | 领域 | `internal/domain/user.go` | 在 `User` 上加字段；需要归一化就在这里加函数 |
 | 仓储 | `internal/adapter/repo/{postgres,sqlite}/user_repo.go` | 把生成模型映射回 `domain.User` |
 | DTO | `internal/adapter/http/dto/auth.go` | 在 `AuthUserResponse` 与 `ToAuthUserResponse` 中暴露字段 |
-| 用例 | `internal/usecase/auth.go` | 只在注册或种子创建需要接收该字段时，扩展 `RegisterInput` / `SeedUserInput` |
-| 种子 | `internal/seed/seed.go`、`internal/usecase/seed_user.go`、`internal/testkit/auth.go` | 需要从 `make seed-user` 或测试夹具写入时同步 |
+| 用例 | `internal/usecase/auth.go` | 只在注册需要接收该字段时扩展 `RegisterInput` |
+| 种子 | `internal/seed/user.go`、`internal/testkit/auth.go` | 需要从 `make seed-user` 或测试夹具写入时同步 |
 | 处理器 | `internal/adapter/http/handler/auth.go` | 只是把 DTO 映射到新的用例输入，不承载业务判断 |
 
 令牌与中间件不需要动：**AccessToken** 只携带 `sub` 与 `roles`，新增字段通过 `GET /api/v1/auth/me` 回库读取。

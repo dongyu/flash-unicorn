@@ -9,10 +9,9 @@ import (
 	"unicorn/internal/platform/config"
 	"unicorn/internal/platform/database"
 	"unicorn/internal/platform/security"
-	"unicorn/internal/usecase"
 )
 
-func Run(ctx context.Context, cfg config.Config, in usecase.SeedUserInput) (domain.User, error) {
+func Run(ctx context.Context, cfg config.Config, in UserInput) (domain.User, error) {
 	db, err := database.Open(ctx, cfg.Database)
 	if err != nil {
 		return domain.User{}, fmt.Errorf("open database: %w", err)
@@ -24,11 +23,10 @@ func Run(ctx context.Context, cfg config.Config, in usecase.SeedUserInput) (doma
 		return domain.User{}, err
 	}
 
-	uc := usecase.NewSeedUserUseCase(
+	return NewSeeder(
 		pers.Users,
 		security.NewBcryptHasher(cfg.Auth.BcryptCost),
 		domain.SystemClock{},
 		domain.UUIDv7Generator{},
-	)
-	return uc.SeedUser(ctx, in)
+	).Create(ctx, in)
 }

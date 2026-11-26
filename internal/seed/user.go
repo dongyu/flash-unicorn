@@ -1,4 +1,4 @@
-package usecase
+package seed
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"unicorn/internal/domain"
 )
 
-type SeedUserInput struct {
+type UserInput struct {
 	Email       string
 	Password    string
 	Role        domain.Role
@@ -17,32 +17,28 @@ type SeedUserInput struct {
 	Status      domain.UserStatus
 }
 
-type SeedUserUseCase interface {
-	SeedUser(ctx context.Context, in SeedUserInput) (domain.User, error)
-}
-
-type seedUserUseCase struct {
-	repo   domain.UserRepository
+type Seeder struct {
+	users  domain.UserRepository
 	hasher domain.PasswordHasher
 	clock  domain.Clock
 	idGen  domain.IDGenerator
 }
 
-func NewSeedUserUseCase(
-	repo domain.UserRepository,
+func NewSeeder(
+	users domain.UserRepository,
 	hasher domain.PasswordHasher,
 	clock domain.Clock,
 	idGen domain.IDGenerator,
-) SeedUserUseCase {
-	return &seedUserUseCase{
-		repo:   repo,
+) *Seeder {
+	return &Seeder{
+		users:  users,
 		hasher: hasher,
 		clock:  clock,
 		idGen:  idGen,
 	}
 }
 
-func (u *seedUserUseCase) SeedUser(ctx context.Context, in SeedUserInput) (domain.User, error) {
+func (s *Seeder) Create(ctx context.Context, in UserInput) (domain.User, error) {
 	email := domain.NormalizeEmail(in.Email)
 	role := in.Role
 	if role == "" {
@@ -53,11 +49,11 @@ func (u *seedUserUseCase) SeedUser(ctx context.Context, in SeedUserInput) (domai
 		status = domain.UserStatusActive
 	}
 
-	if err := validateSeedUserInput(email, role, status); err != nil {
+	if err := validateUserInput(email, role, status); err != nil {
 		return domain.User{}, err
 	}
 
-	_, err := u.repo.GetByEmail(ctx, email)
+	_, err := s.users.GetByEmail(ctx, email)
 	switch {
 	case err == nil:
 		return domain.User{}, fmt.Errorf("user %q already exists: %w", email, domain.ErrConflict)
@@ -67,20 +63,20 @@ func (u *seedUserUseCase) SeedUser(ctx context.Context, in SeedUserInput) (domai
 
 	var passwordHash string
 	if in.Password != "" {
-		hashed, hashErr := u.hasher.Hash(in.Password)
+		hashed, hashErr := s.hasher.Hash(in.Password)
 		if hashErr != nil {
 			return domain.User{}, fmt.Errorf("hash password: %w", hashErr)
 		}
 		passwordHash = hashed
 	}
 
-	id, err := u.idGen.NewID()
+	id, err := s.idGen.NewID()
 	if err != nil {
 		return domain.User{}, fmt.Errorf("generate user id: %w", err)
 	}
 
-	now := u.clock.Now().UTC()
-	candidate := domain.User{
+	now := s.clock.Now().UTC()
+	created, err := s.users.Create(ctx, domain.User{
 		ID:           id,
 		Email:        email,
 		PasswordHash: passwordHash,
@@ -89,9 +85,7 @@ func (u *seedUserUseCase) SeedUser(ctx context.Context, in SeedUserInput) (domai
 		Status:       status,
 		CreatedAt:    now,
 		UpdatedAt:    now,
-	}
-
-	created, err := u.repo.Create(ctx, candidate)
+	})
 	if err != nil {
 		if errors.Is(err, domain.ErrConflict) {
 			return domain.User{}, fmt.Errorf("user %q already exists: %w", email, domain.ErrConflict)
@@ -101,7 +95,7 @@ func (u *seedUserUseCase) SeedUser(ctx context.Context, in SeedUserInput) (domai
 	return created, nil
 }
 
-func validateSeedUserInput(email string, role domain.Role, status domain.UserStatus) error {
+func validateUserInput(email string, role domain.Role, status domain.UserStatus) error {
 	if email == "" {
 		return domain.NewValidationError(
 			"invalid seed user payload",
