@@ -39,6 +39,8 @@ func (h *AuthHandler) RegisterRoutes(api fiber.Router) {
 		auth.Post("/register", h.Register)
 	}
 	auth.Post("/login", h.Login)
+	auth.Post("/refresh", h.Refresh)
+	auth.Post("/logout", h.Logout)
 	auth.Get("/me", h.requireAuth, h.Me)
 }
 
@@ -58,10 +60,11 @@ func (h *AuthHandler) Register(c fiber.Ctx) error {
 	}
 
 	return c.Status(http.StatusCreated).JSON(dto.RegisterResponse{
-		AccessToken: result.AccessToken.Value,
-		TokenType:   dto.TokenTypeBearer,
-		ExpiresIn:   result.ExpiresIn,
-		User:        dto.ToAuthUserResponse(result.User),
+		AccessToken:  result.AccessToken.Value,
+		RefreshToken: string(result.RefreshToken),
+		TokenType:    dto.TokenTypeBearer,
+		ExpiresIn:    result.ExpiresIn,
+		User:         dto.ToAuthUserResponse(result.User),
 	})
 }
 
@@ -83,11 +86,53 @@ func (h *AuthHandler) Login(c fiber.Ctx) error {
 	}
 
 	return c.Status(http.StatusOK).JSON(dto.LoginResponse{
-		AccessToken: result.AccessToken.Value,
-		TokenType:   dto.TokenTypeBearer,
-		ExpiresIn:   result.ExpiresIn,
-		User:        dto.ToAuthUserResponse(result.User),
+		AccessToken:  result.AccessToken.Value,
+		RefreshToken: string(result.RefreshToken),
+		TokenType:    dto.TokenTypeBearer,
+		ExpiresIn:    result.ExpiresIn,
+		User:         dto.ToAuthUserResponse(result.User),
 	})
+}
+
+func (h *AuthHandler) Refresh(c fiber.Ctx) error {
+	req, err := BindBodyAndValidate[dto.RefreshRequest](c, h.validate)
+	if err != nil {
+		return err
+	}
+
+	result, err := h.uc.Refresh(c.Context(), usecase.RefreshInput{
+		RefreshToken: domain.RefreshToken(req.RefreshToken),
+	})
+	if err != nil {
+		if errors.Is(err, domain.ErrUnauthorized) {
+			return fiber.NewError(http.StatusUnauthorized, "invalid refresh token")
+		}
+		return err
+	}
+
+	return c.Status(http.StatusOK).JSON(dto.RefreshResponse{
+		AccessToken:  result.AccessToken.Value,
+		RefreshToken: string(result.RefreshToken),
+		TokenType:    dto.TokenTypeBearer,
+		ExpiresIn:    result.ExpiresIn,
+		User:         dto.ToAuthUserResponse(result.User),
+	})
+}
+
+func (h *AuthHandler) Logout(c fiber.Ctx) error {
+	req, err := BindBodyAndValidate[dto.LogoutRequest](c, h.validate)
+	if err != nil {
+		return err
+	}
+
+	if err := h.uc.Logout(c.Context(), usecase.LogoutInput{
+		RefreshToken: domain.RefreshToken(req.RefreshToken),
+		All:          req.All,
+	}); err != nil {
+		return err
+	}
+
+	return c.SendStatus(http.StatusNoContent)
 }
 
 func (h *AuthHandler) Me(c fiber.Ctx) error {

@@ -63,6 +63,7 @@ type AuthConfig struct {
 	Issuer            string        `koanf:"issuer" validate:"required"`
 	Secret            string        `koanf:"secret" validate:"required,min=32"`
 	AccessTTL         time.Duration `koanf:"access_ttl" validate:"required,gt=0"`
+	RefreshTTL        time.Duration `koanf:"refresh_ttl" validate:"required,gt=0"`
 	Leeway            time.Duration `koanf:"leeway" validate:"gte=0"`
 	BcryptCost        int           `koanf:"bcrypt_cost" validate:"gte=4,lte=14"`
 	AllowRegistration *bool         `koanf:"allow_registration"`
@@ -123,6 +124,7 @@ func defaultConfig() Config {
 			Issuer:     "unicorn",
 			Secret:     developmentSigningKey,
 			AccessTTL:  15 * time.Minute,
+			RefreshTTL: 720 * time.Hour,
 			Leeway:     30 * time.Second,
 			BcryptCost: 4,
 		},
@@ -147,6 +149,7 @@ var flatEnvMapping = map[string]string{
 	"AUTH_ISSUER":               "auth.issuer",
 	"AUTH_SECRET":               "auth.secret",
 	"AUTH_ACCESS_TTL":           "auth.access_ttl",
+	"AUTH_REFRESH_TTL":          "auth.refresh_ttl",
 	"AUTH_LEEWAY":               "auth.leeway",
 	"AUTH_BCRYPT_COST":          "auth.bcrypt_cost",
 	"AUTH_ALLOW_REGISTRATION":   "auth.allow_registration",

@@ -41,7 +41,7 @@ func TestAuth_RegisterIssuesTokensImmediately(t *testing.T) {
 		Role:        domain.RoleUser,
 		Status:      domain.UserStatusActive,
 	}, res.Data.User)
-	require.NotContains(t, string(res.RawBody), "refresh_token")
+	require.NotEmpty(t, res.Data.RefreshToken)
 
 	claims := decodeAccessToken(t, res.Data.AccessToken)
 	require.Equal(t, "unicorn-test", claims["iss"])

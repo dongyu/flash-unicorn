@@ -18,6 +18,16 @@ type Note struct {
 	CreatedAt time.Time
 }
 
+type RefreshToken struct {
+	ID            uuid.UUID
+	UserID        uuid.UUID
+	TokenHash     string
+	ExpiresAt     time.Time
+	CreatedAt     time.Time
+	RevokedAt     pgtype.Timestamptz
+	RotatedFromID pgtype.UUID
+}
+
 type User struct {
 	ID           uuid.UUID
 	Email        string

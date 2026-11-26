@@ -24,10 +24,11 @@ type authUserResponse struct {
 }
 
 type loginResponse struct {
-	AccessToken string           `json:"access_token"`
-	TokenType   string           `json:"token_type"`
-	ExpiresIn   int64            `json:"expires_in"`
-	User        authUserResponse `json:"user"`
+	AccessToken  string           `json:"access_token"`
+	RefreshToken string           `json:"refresh_token"`
+	TokenType    string           `json:"token_type"`
+	ExpiresIn    int64            `json:"expires_in"`
+	User         authUserResponse `json:"user"`
 }
 
 func loginUser(t *testing.T, ta *testkit.TestApp, email, password string) testkit.HTTPResult[loginResponse] {

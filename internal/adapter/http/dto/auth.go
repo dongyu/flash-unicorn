@@ -15,18 +15,37 @@ type RegisterRequest struct {
 	DisplayName string `json:"display_name"`
 }
 
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token" validate:"required"`
+}
+
+type LogoutRequest struct {
+	RefreshToken string `json:"refresh_token" validate:"required"`
+	All          bool   `json:"all"`
+}
+
 type LoginResponse struct {
-	AccessToken string           `json:"access_token"`
-	TokenType   string           `json:"token_type"`
-	ExpiresIn   int64            `json:"expires_in"`
-	User        AuthUserResponse `json:"user"`
+	AccessToken  string           `json:"access_token"`
+	RefreshToken string           `json:"refresh_token"`
+	TokenType    string           `json:"token_type"`
+	ExpiresIn    int64            `json:"expires_in"`
+	User         AuthUserResponse `json:"user"`
 }
 
 type RegisterResponse struct {
-	AccessToken string           `json:"access_token"`
-	TokenType   string           `json:"token_type"`
-	ExpiresIn   int64            `json:"expires_in"`
-	User        AuthUserResponse `json:"user"`
+	AccessToken  string           `json:"access_token"`
+	RefreshToken string           `json:"refresh_token"`
+	TokenType    string           `json:"token_type"`
+	ExpiresIn    int64            `json:"expires_in"`
+	User         AuthUserResponse `json:"user"`
+}
+
+type RefreshResponse struct {
+	AccessToken  string           `json:"access_token"`
+	RefreshToken string           `json:"refresh_token"`
+	TokenType    string           `json:"token_type"`
+	ExpiresIn    int64            `json:"expires_in"`
+	User         AuthUserResponse `json:"user"`
 }
 
 type AuthUserResponse struct {
