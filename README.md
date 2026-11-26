@@ -28,6 +28,57 @@
    - 领域与用例：`internal/domain/note.go`、`internal/usecase/note.go`、`internal/usecase/note_test.go`
    - 适配器：`internal/adapter/http/dto/note.go`、`internal/adapter/http/handler/note.go`、`internal/adapter/http/handler/note_test.go`、`internal/adapter/worker/note_created.go`、`internal/adapter/repo/*/note_repo*.go`
 
+   认证不在可删除清单里：`internal/domain/{user,principal,token}.go`、`internal/usecase/auth.go`、`internal/adapter/http/{dto,handler,middleware}/auth*.go`、`internal/platform/security/*`、`users` / `refresh_tokens` 迁移与查询都是模板基础设施，详见 [ADR-0006](./docs/adr/0006-users-table-is-template-infrastructure.md)。
+
+---
+
+## 内置认证
+
+模板已内置一条可直接使用的认证纵切面：**User** 落库，密码用 bcrypt 存储，登录签发 **AccessToken**（HS256 JWT，默认 15 分钟）与 **RefreshToken**（不透明、只能存哈希、可轮换、可吊销）。`notes` 示例路由全部要求 **AccessToken**，作为 `RequireAuth` 的用法示范。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `POST` | `/api/v1/auth/register` | 注册并直接返回令牌对；生产环境默认不注册该路由 |
+| `POST` | `/api/v1/auth/login` | 邮箱 + 密码换取令牌对 |
+| `POST` | `/api/v1/auth/refresh` | 用 **RefreshToken** 换取新令牌对，旧令牌立即失效 |
+| `POST` | `/api/v1/auth/logout` | 吊销当前 **RefreshToken**；`all=true` 时吊销该 **User** 的全部会话 |
+| `GET` | `/api/v1/auth/me` | 需要 **AccessToken**，回库读取当前 **User** 的邮箱、显示名、**Role** 与状态 |
+
+错误统一走 RFC 9457 ProblemDetails；`401` 附带 `WWW-Authenticate: Bearer`，登录与注册接口按 IP 限流（`429`）。
+
+### 创建第一个用户
+
+先执行迁移，再用 `seed-user` 在不开 HTTP 的情况下创建管理员：
+
+```bash
+make migrate-up
+make seed-user email=admin@example.com role=admin
+```
+
+命令会交互式读取密码；密码只经 stdin 传给进程，不接受 `password=` 这类 make 变量，因此不会留在 shell 历史或进程参数里。开发环境也可以直接调注册接口：
+
+```bash
+curl -sS -X POST http://localhost:3331/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"change-me-please"}'
+```
+
+### 带令牌调用
+
+登录或注册的响应形如 `{"access_token":"...","refresh_token":"...","token_type":"Bearer","expires_in":900,"user":{...}}`。后续请求把 **AccessToken** 放进 `Authorization` 头：
+
+```bash
+TOKEN=$(curl -sS -X POST http://localhost:3331/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"change-me-please"}' \
+  | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+
+curl -sS -H "Authorization: Bearer $TOKEN" http://localhost:3331/api/v1/auth/me
+curl -sS -H "Authorization: Bearer $TOKEN" http://localhost:3331/api/v1/notes
+```
+
+加用户字段、换外部 IdP、加细粒度授权分别要改哪里，见 [docs/engineering/auth.md](./docs/engineering/auth.md)；令牌模型与 `users` 表的边界见 [ADR-0005](./docs/adr/0005-access-token-and-refresh-token.md) 与 [ADR-0006](./docs/adr/0006-users-table-is-template-infrastructure.md)。
+
 ---
 
 ## 架构设计总览
@@ -39,7 +90,7 @@ cmd/server ─▶ internal/app ─▶ internal/adapter/{http,worker,repo,queue} 
                    └──────────────▶ internal/platform/{buildinfo,config,logger,database,queue,telemetry}
 ```
 
-- **架构决策记录（ADR）**：关键技术权衡（仅支持 PostgreSQL + SQLite、双库 `sqlc` + `context` 透传事务、分离 `golang-migrate` 与 `rivermigrate` 生命周期）详见 [docs/adr/](./docs/adr/)。
+- **架构决策记录（ADR）**：关键技术权衡（仅支持 PostgreSQL + SQLite、双库 `sqlc` + `context` 透传事务、分离 `golang-migrate` 与 `rivermigrate` 生命周期、令牌模型、`users` 表属于模板核心设施）详见 [docs/adr/](./docs/adr/)。
 - **模块演进规范**：业务实体较少时在 `internal/domain` 与 `internal/usecase` 内按文件平铺；当核心聚合超过 4~5 个时，建议在各层内按业务域建对齐的子包（例如 `domain/order`、`usecase/order`、`adapter/http/handler/order`）。
 
 ---
@@ -47,13 +98,15 @@ cmd/server ─▶ internal/app ─▶ internal/adapter/{http,worker,repo,queue} 
 ## 目录结构
 
 ```text
-├── cmd/server/                  # 单一二进制入口 (all | api | worker | version | config | migrate)
+├── cmd/server/                  # 单一二进制入口 (all | api | worker | version | config | migrate | seed-user)
 ├── configs/                     # 可选 YAML 配置示例 (config.example.yaml)
 ├── db/
 │   ├── embed.go                 # 内嵌业务迁移 SQL，供 testkit 零依赖执行
 │   ├── postgres/                # PostgreSQL 迁移文件 (migrations/) 与 sqlc 查询 (queries/)
 │   └── sqlite/                  # SQLite 迁移文件 (migrations/) 与 sqlc 查询 (queries/)
-├── docs/adr/                    # 架构决策记录 (ADR)
+├── docs/
+│   ├── adr/                     # 架构决策记录 (ADR)
+│   └── engineering/             # 工程操作手册 (lint、认证等)
 ├── internal/
 │   ├── domain/                  # 纯业务实体、哨兵错误、Clock、IDGenerator、Repository/Queue/Tx 接口
 │   ├── usecase/                 # 应用用例编排（零外部框架依赖，使用 zerolog.Ctx 打日志）
@@ -70,7 +123,7 @@ cmd/server ─▶ internal/app ─▶ internal/adapter/{http,worker,repo,queue} 
 │   │       ├── sqlite/          # sqlc (modernc.org/sqlite) 生成代码 + Repository 与 TxManager 实现
 │   │       ├── queue/           # River 入队适配器（自动参与当前事务）
 │   │       └── txctx/           # 通过 context.Context 透传 pgx.Tx / *sql.Tx
-│   ├── platform/                # buildinfo、koanf 配置、Zerolog、数据库连接池、River 客户端、Sentry 初始化
+│   ├── platform/                # buildinfo、koanf 配置、Zerolog、数据库连接池、River 客户端、Sentry 与安全适配器
 │   ├── app/                     # 手写依赖组装 (Composition Root) 与优雅停机编排
 │   └── testkit/                 # 零 Docker SQLite 测试套件、HTTP/Problem 断言助手、双库契约测试基类
 │       └── mocks/               # GoMock 生成桩，按来源包拆分为 domain/ 与 usecase/ 避免循环依赖
@@ -93,7 +146,7 @@ cmd/server ─▶ internal/app ─▶ internal/adapter/{http,worker,repo,queue} 
 1. **数据库迁移**：执行 `make migrate-create name=create_orders`，分别完善 `db/postgres/migrations/` 与 `db/sqlite/migrations/` 的 DDL，然后运行 `make db-check` 校验双库迁移文件对齐。
 2. **编写 SQL 与生成代码**：在 `db/postgres/queries/` 与 `db/sqlite/queries/` 编写查询，运行 `make gen` 同步执行 `sqlc generate` 与 GoMock 生成。
 3. **定义领域与用例**：在 `internal/domain/` 定义实体与端口接口（添加 `//go:generate mockgen ...` 指向 `internal/testkit/mocks/domain/`），在 `internal/usecase/` 编排业务逻辑并用 `TxManager.WithinTx` 保证写库与发队列原子性。
-4. **实现适配器与组装**：在 `internal/adapter/repo/{postgres,sqlite}/` 实现仓储适配器，在 `internal/adapter/http/{dto,handler}/` 添加 DTO 与 Handler，在 [internal/app/app.go](./internal/app/app.go) 完成组装并把 Handler 注入 `Routes` 切片（无需改动 [router.go](./internal/adapter/http/router.go)）。
+4. **实现适配器与组装**：在 `internal/adapter/repo/{postgres,sqlite}/` 实现仓储适配器，在 `internal/adapter/http/{dto,handler}/` 添加 DTO 与 Handler，在 [internal/app/app.go](./internal/app/app.go) 完成组装并把 Handler 注入 `Routes` 切片（无需改动 [router.go](./internal/adapter/http/router.go)）。受保护路由用 `middleware.RequireAuth`（见 `internal/adapter/http/handler/note.go`），管理接口再叠加 `middleware.RequireRole(domain.RoleAdmin)`。
 5. **补齐三层测试**：
    - **单元测试**：`internal/usecase/*_test.go`、`internal/adapter/http/handler/*_test.go`（使用 GoMock + `testkit.FakeClock` + `testify/require`）。
    - **双库契约测试**：在 `internal/testkit/` 编写 `testify/suite` 契约套件，默认随 SQLite 测试运行，CI 通过 `make test-int` 在 PostgreSQL 上跑同一套断言。
@@ -126,6 +179,7 @@ cmd/server ─▶ internal/app ─▶ internal/adapter/{http,worker,repo,queue} 
 | `make tools` | 安装固定版本的 `sqlc`、`mockgen`、`air`、`golangci-lint` 与 `migrate` 到 `./bin/` |
 | `make gen` | 执行 `sqlc generate` 与 GoMock 生成 |
 | `make dev` | 启动 Air 热重载开发环境 |
+| `make seed-user` | 创建用户（`email=...`，可选 `role=admin`），密码从 stdin 读取 |
 | `make test` | 运行全量单元测试与零 Docker SQLite 集成测试 |
 | `make test-int` | 运行含 PostgreSQL 契约测试在内的完整测试（需设置 `TEST_POSTGRES_DSN`） |
 | `make lint` | 运行 `golangci-lint`（含 Clean Architecture `depguard` 依赖边界检查与 `integration` build tag 代码） |
