@@ -9,7 +9,20 @@ type LoginRequest struct {
 	Password string `json:"password" validate:"required,max=72"`
 }
 
+type RegisterRequest struct {
+	Email       string `json:"email" validate:"required,email"`
+	Password    string `json:"password" validate:"required,passwordlen"`
+	DisplayName string `json:"display_name"`
+}
+
 type LoginResponse struct {
+	AccessToken string           `json:"access_token"`
+	TokenType   string           `json:"token_type"`
+	ExpiresIn   int64            `json:"expires_in"`
+	User        AuthUserResponse `json:"user"`
+}
+
+type RegisterResponse struct {
 	AccessToken string           `json:"access_token"`
 	TokenType   string           `json:"token_type"`
 	ExpiresIn   int64            `json:"expires_in"`

@@ -39,6 +39,7 @@ auth:
   access_ttl: 5m
   leeway: 10s
   bcrypt_cost: 12
+  allow_registration: true
 sentry:
   dsn: "https://examplePublicKey@o0.ingest.sentry.io/0"
   enable_tracing: true
@@ -71,6 +72,7 @@ sentry:
 	require.Equal(t, fixtureSigningKey, cfg.Auth.Secret)
 	require.Equal(t, 5*time.Minute, cfg.Auth.AccessTTL)
 	require.Equal(t, 10*time.Second, cfg.Auth.Leeway)
+	require.True(t, cfg.Auth.RegistrationAllowed())
 }
 
 func TestLoad_RejectsUnsupportedDatabaseScheme(t *testing.T) {
@@ -120,6 +122,7 @@ func TestLoad_AcceptsProductionBcryptCostAtFloor(t *testing.T) {
 				"APP_ENV=production",
 				"AUTH_BCRYPT_COST=10",
 				"AUTH_SECRET=" + fixtureSigningKey,
+				"AUTH_ALLOW_REGISTRATION=true",
 			}
 		},
 	})
@@ -202,4 +205,51 @@ func TestLoad_RejectsBcryptCostOutsideRange(t *testing.T) {
 			require.Contains(t, err.Error(), "bcrypt_cost")
 		})
 	}
+}
+
+func TestLoad_RegistrationEnabledByDefaultOutsideProduction(t *testing.T) {
+	cfg, err := config.Load(config.LoadOptions{
+		EnvironFunc: func() []string { return nil },
+	})
+	require.NoError(t, err)
+	require.True(t, cfg.Auth.RegistrationAllowed())
+}
+
+func TestLoad_RejectsProductionWithoutExplicitRegistration(t *testing.T) {
+	_, err := config.Load(config.LoadOptions{
+		EnvironFunc: func() []string {
+			return []string{
+				"APP_ENV=production",
+				"AUTH_BCRYPT_COST=10",
+				"AUTH_SECRET=" + fixtureSigningKey,
+			}
+		},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "auth.allow_registration")
+}
+
+func TestLoad_AcceptsProductionRegistrationExplicitlyEnabled(t *testing.T) {
+	cfg, err := config.Load(config.LoadOptions{
+		EnvironFunc: func() []string {
+			return []string{
+				"APP_ENV=production",
+				"AUTH_BCRYPT_COST=10",
+				"AUTH_SECRET=" + fixtureSigningKey,
+				"AUTH_ALLOW_REGISTRATION=true",
+			}
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, cfg.Auth.RegistrationAllowed())
+}
+
+func TestLoad_AcceptsRegistrationDisabledByEnv(t *testing.T) {
+	cfg, err := config.Load(config.LoadOptions{
+		EnvironFunc: func() []string {
+			return []string{"AUTH_ALLOW_REGISTRATION=false"}
+		},
+	})
+	require.NoError(t, err)
+	require.False(t, cfg.Auth.RegistrationAllowed())
 }

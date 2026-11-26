@@ -13,23 +13,56 @@ import (
 )
 
 type AuthHandler struct {
-	uc          usecase.AuthUseCase
-	validate    *validator.Validate
-	requireAuth fiber.Handler
+	uc                usecase.AuthUseCase
+	validate          *validator.Validate
+	requireAuth       fiber.Handler
+	allowRegistration bool
 }
 
-func NewAuthHandler(uc usecase.AuthUseCase, validate *validator.Validate, requireAuth fiber.Handler) *AuthHandler {
+func NewAuthHandler(
+	uc usecase.AuthUseCase,
+	validate *validator.Validate,
+	requireAuth fiber.Handler,
+	allowRegistration bool,
+) *AuthHandler {
 	return &AuthHandler{
-		uc:          uc,
-		validate:    validate,
-		requireAuth: requireAuth,
+		uc:                uc,
+		validate:          validate,
+		requireAuth:       requireAuth,
+		allowRegistration: allowRegistration,
 	}
 }
 
 func (h *AuthHandler) RegisterRoutes(api fiber.Router) {
 	auth := api.Group("/auth")
+	if h.allowRegistration {
+		auth.Post("/register", h.Register)
+	}
 	auth.Post("/login", h.Login)
 	auth.Get("/me", h.requireAuth, h.Me)
+}
+
+func (h *AuthHandler) Register(c fiber.Ctx) error {
+	req, err := BindBodyAndValidate[dto.RegisterRequest](c, h.validate)
+	if err != nil {
+		return err
+	}
+
+	result, err := h.uc.Register(c.Context(), usecase.RegisterInput{
+		Email:       req.Email,
+		Password:    req.Password,
+		DisplayName: req.DisplayName,
+	})
+	if err != nil {
+		return err
+	}
+
+	return c.Status(http.StatusCreated).JSON(dto.RegisterResponse{
+		AccessToken: result.AccessToken.Value,
+		TokenType:   dto.TokenTypeBearer,
+		ExpiresIn:   result.ExpiresIn,
+		User:        dto.ToAuthUserResponse(result.User),
+	})
 }
 
 func (h *AuthHandler) Login(c fiber.Ctx) error {

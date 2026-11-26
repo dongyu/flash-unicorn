@@ -60,11 +60,16 @@ type RiverConfig struct {
 }
 
 type AuthConfig struct {
-	Issuer     string        `koanf:"issuer" validate:"required"`
-	Secret     string        `koanf:"secret" validate:"required,min=32"`
-	AccessTTL  time.Duration `koanf:"access_ttl" validate:"required,gt=0"`
-	Leeway     time.Duration `koanf:"leeway" validate:"gte=0"`
-	BcryptCost int           `koanf:"bcrypt_cost" validate:"gte=4,lte=14"`
+	Issuer            string        `koanf:"issuer" validate:"required"`
+	Secret            string        `koanf:"secret" validate:"required,min=32"`
+	AccessTTL         time.Duration `koanf:"access_ttl" validate:"required,gt=0"`
+	Leeway            time.Duration `koanf:"leeway" validate:"gte=0"`
+	BcryptCost        int           `koanf:"bcrypt_cost" validate:"gte=4,lte=14"`
+	AllowRegistration *bool         `koanf:"allow_registration"`
+}
+
+func (c AuthConfig) RegistrationAllowed() bool {
+	return c.AllowRegistration != nil && *c.AllowRegistration
 }
 
 const (
@@ -144,6 +149,7 @@ var flatEnvMapping = map[string]string{
 	"AUTH_ACCESS_TTL":           "auth.access_ttl",
 	"AUTH_LEEWAY":               "auth.leeway",
 	"AUTH_BCRYPT_COST":          "auth.bcrypt_cost",
+	"AUTH_ALLOW_REGISTRATION":   "auth.allow_registration",
 }
 
 func Load(opts LoadOptions) (Config, error) {
@@ -196,6 +202,11 @@ func Load(opts LoadOptions) (Config, error) {
 		return Config{}, fmt.Errorf("unmarshal config: %w", err)
 	}
 
+	if cfg.Auth.AllowRegistration == nil {
+		allowRegistration := cfg.App.Env != "production"
+		cfg.Auth.AllowRegistration = &allowRegistration
+	}
+
 	if err := Validate(cfg); err != nil {
 		return Config{}, err
 	}
@@ -224,6 +235,9 @@ func Validate(cfg Config) error {
 	}
 	if cfg.App.Env != "development" && cfg.Auth.Secret == developmentSigningKey {
 		return errors.New("invalid configuration: auth.secret must not be the development default outside development")
+	}
+	if cfg.App.Env == "production" && !cfg.Auth.RegistrationAllowed() {
+		return errors.New("invalid configuration: auth.allow_registration must be explicitly enabled in production")
 	}
 	return nil
 }
