@@ -55,20 +55,20 @@ type AuthUseCase interface {
 }
 
 type authUseCase struct {
-	repo          domain.UserRepository
-	refreshTokens domain.RefreshTokenRepository
-	hasher        domain.PasswordHasher
-	issuer        domain.TokenIssuer
-	refreshGen    domain.RefreshTokenGenerator
-	refreshTTL    time.Duration
-	clock         domain.Clock
-	idGen         domain.IDGenerator
-	dummyHash     string
+	repo             domain.UserRepository
+	refreshTokenRepo domain.RefreshTokenRepository
+	hasher           domain.PasswordHasher
+	issuer           domain.TokenIssuer
+	refreshGen       domain.RefreshTokenGenerator
+	refreshTTL       time.Duration
+	clock            domain.Clock
+	idGen            domain.IDGenerator
+	dummyHash        string
 }
 
 func NewAuthUseCase(
 	repo domain.UserRepository,
-	refreshTokens domain.RefreshTokenRepository,
+	refreshTokenRepo domain.RefreshTokenRepository,
 	hasher domain.PasswordHasher,
 	issuer domain.TokenIssuer,
 	refreshGen domain.RefreshTokenGenerator,
@@ -81,15 +81,15 @@ func NewAuthUseCase(
 		return nil, fmt.Errorf("hash dummy credential: %w", err)
 	}
 	return &authUseCase{
-		repo:          repo,
-		refreshTokens: refreshTokens,
-		hasher:        hasher,
-		issuer:        issuer,
-		refreshGen:    refreshGen,
-		refreshTTL:    refreshTTL,
-		clock:         clock,
-		idGen:         idGen,
-		dummyHash:     dummyHash,
+		repo:             repo,
+		refreshTokenRepo: refreshTokenRepo,
+		hasher:           hasher,
+		issuer:           issuer,
+		refreshGen:       refreshGen,
+		refreshTTL:       refreshTTL,
+		clock:            clock,
+		idGen:            idGen,
+		dummyHash:        dummyHash,
 	}, nil
 }
 
@@ -184,7 +184,7 @@ func (u *authUseCase) Login(ctx context.Context, in LoginInput) (AuthResult, err
 func (u *authUseCase) Refresh(ctx context.Context, in RefreshInput) (AuthResult, error) {
 	tokenHash := u.refreshGen.HashRefreshToken(in.RefreshToken)
 
-	stored, err := u.refreshTokens.GetByHash(ctx, tokenHash)
+	stored, err := u.refreshTokenRepo.GetByHash(ctx, tokenHash)
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		return rejectUnauthorized(ctx, refreshRejectedMsg, uuid.Nil, "unknown_refresh_token")
@@ -194,7 +194,7 @@ func (u *authUseCase) Refresh(ctx context.Context, in RefreshInput) (AuthResult,
 
 	now := u.clock.Now().UTC()
 	if stored.Revoked() {
-		if revokeErr := u.refreshTokens.RevokeAllActiveForUser(ctx, stored.UserID, now); revokeErr != nil {
+		if revokeErr := u.refreshTokenRepo.RevokeAllActiveForUser(ctx, stored.UserID, now); revokeErr != nil {
 			return AuthResult{}, fmt.Errorf("revoke refresh token family: %w", revokeErr)
 		}
 		return rejectUnauthorized(ctx, refreshRejectedMsg, stored.UserID, "revoked_refresh_token")
@@ -216,7 +216,7 @@ func (u *authUseCase) Refresh(ctx context.Context, in RefreshInput) (AuthResult,
 		return rejectUnauthorized(ctx, refreshRejectedMsg, user.ID, "disabled_user")
 	}
 
-	rotated, err := u.refreshTokens.RevokeIfActive(ctx, tokenHash, now)
+	rotated, err := u.refreshTokenRepo.RevokeIfActive(ctx, tokenHash, now)
 	if err != nil {
 		return AuthResult{}, fmt.Errorf("revoke rotated refresh token: %w", err)
 	}
@@ -246,13 +246,13 @@ func (u *authUseCase) Logout(ctx context.Context, in LogoutInput) error {
 	now := u.clock.Now().UTC()
 
 	if !in.All {
-		if _, err := u.refreshTokens.RevokeIfActive(ctx, tokenHash, now); err != nil {
+		if _, err := u.refreshTokenRepo.RevokeIfActive(ctx, tokenHash, now); err != nil {
 			return fmt.Errorf("revoke refresh token: %w", err)
 		}
 		return nil
 	}
 
-	stored, err := u.refreshTokens.GetByHash(ctx, tokenHash)
+	stored, err := u.refreshTokenRepo.GetByHash(ctx, tokenHash)
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		return nil
@@ -260,7 +260,7 @@ func (u *authUseCase) Logout(ctx context.Context, in LogoutInput) error {
 		return fmt.Errorf("look up refresh token: %w", err)
 	}
 
-	if err := u.refreshTokens.RevokeAllActiveForUser(ctx, stored.UserID, now); err != nil {
+	if err := u.refreshTokenRepo.RevokeAllActiveForUser(ctx, stored.UserID, now); err != nil {
 		return fmt.Errorf("revoke refresh tokens: %w", err)
 	}
 
@@ -303,7 +303,7 @@ func (u *authUseCase) issueTokenPair(
 	}
 
 	now := u.clock.Now().UTC()
-	_, err = u.refreshTokens.Create(ctx, domain.RefreshTokenRecord{
+	_, err = u.refreshTokenRepo.Create(ctx, domain.RefreshTokenRecord{
 		ID:            recordID,
 		UserID:        user.ID,
 		TokenHash:     u.refreshGen.HashRefreshToken(refreshToken),
