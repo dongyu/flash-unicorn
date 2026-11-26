@@ -214,7 +214,7 @@ func TestAuth_LogoutRevokesOnlyPresentedToken(t *testing.T) {
 	testkit.RequireProblem(t, revoked, http.StatusUnauthorized)
 }
 
-func TestAuth_LogoutAllRevokesEverySession(t *testing.T) {
+func TestAuth_LogoutAllRevokesEveryRefreshToken(t *testing.T) {
 	t.Parallel()
 
 	ta := testkit.NewTestApp(t)
