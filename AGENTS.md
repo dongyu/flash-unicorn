@@ -15,3 +15,7 @@ Single-context repo (`GLOSSARY.md` and `docs/adr/` at the repo root). See `docs/
 ### Quality gates
 
 `make lint` must stay at 0 issues. Adding a linter or a `//nolint` has a required procedure, and the three gate layers (architecture boundary / correctness / style) are deliberately kept separate. See `docs/engineering/lint-policy.md` and ADR `docs/adr/0004-quality-gate-layering.md`.
+
+### Comments
+
+Names and types carry the meaning, so the comment layer stays empty. The only lines starting with `//`, `--`, or `#` are ones a machine reads: build tags, `//go:embed`, `//go:generate`, `//nolint:<linter>`, sqlc's `-- name:` directives, the Dockerfile `# syntax:` directive, and Makefile `## ` help text. Anything else lives in `docs/` instead — a decision goes to `docs/adr/`, an operating rule or an exemption's reason to `docs/engineering/`. Review test: delete the comment, and no reader loses anything.

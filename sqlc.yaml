@@ -4,9 +4,6 @@ sql:
     engine: "postgresql"
     schema: "db/postgres/migrations"
     queries: "db/postgres/queries"
-    # Optional: set DATABASE_URL when running `sqlc vet` against a live database.
-    # database:
-    #   uri: ${DATABASE_URL}
     gen:
       go:
         package: "pggen"

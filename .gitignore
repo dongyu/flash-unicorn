@@ -1,9 +1,7 @@
-# Binaries and build outputs
 bin/
 tmp/
 dist/
 
-# Local env and database files
 .env
 *.db
 *.db-shm
@@ -11,6 +9,5 @@ dist/
 *.sqlite
 *.sqlite3
 
-# Test and coverage outputs
 coverage.out
 *.test
