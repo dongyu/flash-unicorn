@@ -122,8 +122,8 @@ func TestSeedUserUseCase_RejectsInvalidInput(t *testing.T) {
 
 	for name, in := range map[string]usecase.SeedUserInput{
 		"empty email":    {Password: "s3cret"},
-		"empty password": {Email: "user@example.com"},
 		"unknown role":   {Email: "user@example.com", Password: "s3cret", Role: domain.Role("owner")},
+		"unknown status": {Email: "user@example.com", Password: "s3cret", Status: domain.UserStatus("pending")},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := uc.SeedUser(context.Background(), in)
@@ -148,4 +148,46 @@ func TestSeedUserUseCase_HasherFailurePropagates(t *testing.T) {
 		Password: "s3cret",
 	})
 	require.ErrorIs(t, err, hashErr)
+}
+
+func TestSeedUserUseCase_CreatesUserWithoutCredential(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := domainmock.NewMockUserRepository(ctrl)
+	hasher := domainmock.NewMockPasswordHasher(ctrl)
+
+	uc := usecase.NewSeedUserUseCase(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
+
+	repo.EXPECT().GetByEmail(gomock.Any(), "external@example.com").Return(domain.User{}, domain.ErrNotFound)
+	repo.EXPECT().Create(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, user domain.User) (domain.User, error) {
+			require.Equal(t, "", user.PasswordHash)
+			require.Equal(t, domain.UserStatusActive, user.Status)
+			return user, nil
+		})
+
+	_, err := uc.SeedUser(context.Background(), usecase.SeedUserInput{Email: "external@example.com"})
+	require.NoError(t, err)
+}
+
+func TestSeedUserUseCase_HonoursExplicitStatus(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := domainmock.NewMockUserRepository(ctrl)
+	hasher := domainmock.NewMockPasswordHasher(ctrl)
+
+	uc := usecase.NewSeedUserUseCase(repo, hasher, testkit.NewFakeClock(time.Now()), &testkit.SeqIDGenerator{})
+
+	repo.EXPECT().GetByEmail(gomock.Any(), "off@example.com").Return(domain.User{}, domain.ErrNotFound)
+	hasher.EXPECT().Hash("s3cret").Return("bcrypt-hash", nil)
+	repo.EXPECT().Create(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, user domain.User) (domain.User, error) {
+			require.Equal(t, domain.UserStatusDisabled, user.Status)
+			return user, nil
+		})
+
+	_, err := uc.SeedUser(context.Background(), usecase.SeedUserInput{
+		Email:    "off@example.com",
+		Password: "s3cret",
+		Status:   domain.UserStatusDisabled,
+	})
+	require.NoError(t, err)
 }

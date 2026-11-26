@@ -28,6 +28,10 @@ const (
 	UserStatusDisabled UserStatus = "disabled"
 )
 
+func (s UserStatus) Valid() bool {
+	return s == UserStatusActive || s == UserStatusDisabled
+}
+
 type User struct {
 	ID           uuid.UUID
 	Email        string
