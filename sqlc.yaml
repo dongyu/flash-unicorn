@@ -40,6 +40,10 @@ sql:
             go_type:
               import: "github.com/google/uuid"
               type: "UUID"
+          - column: "users.id"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
           - db_type: "datetime"
             go_type:
               import: "time"

@@ -50,14 +50,14 @@ func New(ctx context.Context, cfg config.Config, log zerolog.Logger, opts ...Opt
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 
-	txManager, noteRepo, err := buildPersistence(db)
+	pers, err := buildPersistence(db)
 	if err != nil {
 		_ = db.Close()
 		flushSentry()
 		return nil, err
 	}
 
-	noteProcessor := usecase.NewNoteJobProcessor(noteRepo)
+	noteProcessor := usecase.NewNoteJobProcessor(pers.notes)
 	workers := worker.RegisterWorkers(noteProcessor)
 	registerWorkers := cfg.Server.Mode == config.ModeAll || cfg.Server.Mode == config.ModeWorker
 
@@ -70,8 +70,8 @@ func New(ctx context.Context, cfg config.Config, log zerolog.Logger, opts ...Opt
 
 	enqueuer := queueadapter.NewEnqueuer(riverClient)
 	noteUC := usecase.NewNoteUseCase(
-		txManager,
-		noteRepo,
+		pers.tx,
+		pers.notes,
 		enqueuer,
 		deps.Clock,
 		deps.IDGenerator,
@@ -185,13 +185,27 @@ func (a *Application) Run(ctx context.Context) error {
 	return errors.Join(runErr, shutdownErr)
 }
 
-func buildPersistence(db *database.DB) (domain.TxManager, domain.NoteRepository, error) {
+type persistence struct {
+	tx    domain.TxManager
+	notes domain.NoteRepository
+	users domain.UserRepository
+}
+
+func buildPersistence(db *database.DB) (persistence, error) {
 	switch db.Dialect {
 	case database.DialectPostgres:
-		return postgresrepo.NewTxManager(db.Postgres), postgresrepo.NewNoteRepository(db.Postgres), nil
+		return persistence{
+			tx:    postgresrepo.NewTxManager(db.Postgres),
+			notes: postgresrepo.NewNoteRepository(db.Postgres),
+			users: postgresrepo.NewUserRepository(db.Postgres),
+		}, nil
 	case database.DialectSQLite:
-		return sqliterepo.NewTxManager(db.SQLite), sqliterepo.NewNoteRepository(db.SQLite), nil
+		return persistence{
+			tx:    sqliterepo.NewTxManager(db.SQLite),
+			notes: sqliterepo.NewNoteRepository(db.SQLite),
+			users: sqliterepo.NewUserRepository(db.SQLite),
+		}, nil
 	default:
-		return nil, nil, fmt.Errorf("unsupported dialect %q", db.Dialect)
+		return persistence{}, fmt.Errorf("unsupported dialect %q", db.Dialect)
 	}
 }

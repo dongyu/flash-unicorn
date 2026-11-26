@@ -78,6 +78,9 @@ func defaultTestConfig() config.Config {
 		River: config.RiverConfig{
 			MaxWorkers: 2,
 		},
+		Auth: config.AuthConfig{
+			BcryptCost: 4,
+		},
 	}
 }
 

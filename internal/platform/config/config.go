@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -31,6 +32,7 @@ type Config struct {
 	Log      LogConfig      `koanf:"log" validate:"required"`
 	River    RiverConfig    `koanf:"river" validate:"required"`
 	Sentry   SentryConfig   `koanf:"sentry" validate:"required"`
+	Auth     AuthConfig     `koanf:"auth" validate:"required"`
 }
 
 type AppConfig struct {
@@ -55,6 +57,10 @@ type LogConfig struct {
 
 type RiverConfig struct {
 	MaxWorkers int `koanf:"max_workers" validate:"gte=1"`
+}
+
+type AuthConfig struct {
+	BcryptCost int `koanf:"bcrypt_cost" validate:"gte=4,lte=14"`
 }
 
 type SentryConfig struct {
@@ -99,6 +105,9 @@ func defaultConfig() Config {
 			TracesSampleRate: 0,
 			FlushTimeout:     2 * time.Second,
 		},
+		Auth: AuthConfig{
+			BcryptCost: 4,
+		},
 	}
 }
 
@@ -117,6 +126,7 @@ var flatEnvMapping = map[string]string{
 	"SENTRY_ENABLE_TRACING":     "sentry.enable_tracing",
 	"SENTRY_TRACES_SAMPLE_RATE": "sentry.traces_sample_rate",
 	"SENTRY_FLUSH_TIMEOUT":      "sentry.flush_timeout",
+	"AUTH_BCRYPT_COST":          "auth.bcrypt_cost",
 }
 
 func Load(opts LoadOptions) (Config, error) {
@@ -177,6 +187,13 @@ func Load(opts LoadOptions) (Config, error) {
 
 func Validate(cfg Config) error {
 	v := validator.New(validator.WithRequiredStructEnabled())
+	v.RegisterTagNameFunc(func(fld reflect.StructField) string {
+		name := strings.SplitN(fld.Tag.Get("koanf"), ",", 2)[0]
+		if name == "" || name == "-" {
+			return fld.Name
+		}
+		return name
+	})
 	if err := v.Struct(cfg); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}

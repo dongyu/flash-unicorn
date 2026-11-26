@@ -72,3 +72,35 @@ func TestLoad_RejectsUnsupportedDatabaseScheme(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "postgres://")
 }
+
+func TestLoad_AuthBcryptCostDefaultsToFour(t *testing.T) {
+	cfg, err := config.Load(config.LoadOptions{
+		EnvironFunc: func() []string { return nil },
+	})
+	require.NoError(t, err)
+	require.Equal(t, 4, cfg.Auth.BcryptCost)
+}
+
+func TestLoad_AuthBcryptCostFromEnv(t *testing.T) {
+	cfg, err := config.Load(config.LoadOptions{
+		EnvironFunc: func() []string {
+			return []string{"AUTH_BCRYPT_COST=10"}
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 10, cfg.Auth.BcryptCost)
+}
+
+func TestLoad_RejectsBcryptCostOutsideRange(t *testing.T) {
+	for _, raw := range []string{"3", "15"} {
+		t.Run(raw, func(t *testing.T) {
+			_, err := config.Load(config.LoadOptions{
+				EnvironFunc: func() []string {
+					return []string{"AUTH_BCRYPT_COST=" + raw}
+				},
+			})
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "bcrypt_cost")
+		})
+	}
+}
