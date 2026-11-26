@@ -13,7 +13,11 @@ import (
 	"unicorn/internal/domain"
 )
 
-const dummyHashSeed = "unicorn-dummy-credential-0001"
+const (
+	dummyHashSeed      = "unicorn-dummy-credential-0001"
+	loginRejectedMsg   = "login rejected"
+	refreshRejectedMsg = "refresh rejected"
+)
 
 type LoginInput struct {
 	Email    string
@@ -142,26 +146,22 @@ func (u *authUseCase) Login(ctx context.Context, in LoginInput) (AuthResult, err
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		u.verifyDummy(in.Password)
-		logLoginFailure(ctx, uuid.Nil, "unknown_user")
-		return AuthResult{}, domain.ErrUnauthorized
+		return rejectUnauthorized(ctx, loginRejectedMsg, uuid.Nil, "unknown_user")
 	case err != nil:
 		return AuthResult{}, fmt.Errorf("look up user by email: %w", err)
 	}
 
 	if user.PasswordHash == "" {
 		u.verifyDummy(in.Password)
-		logLoginFailure(ctx, user.ID, "missing_credential")
-		return AuthResult{}, domain.ErrUnauthorized
+		return rejectUnauthorized(ctx, loginRejectedMsg, user.ID, "missing_credential")
 	}
 
 	if verifyErr := u.hasher.Verify(in.Password, user.PasswordHash); verifyErr != nil {
-		logLoginFailure(ctx, user.ID, "password_mismatch")
-		return AuthResult{}, domain.ErrUnauthorized
+		return rejectUnauthorized(ctx, loginRejectedMsg, user.ID, "password_mismatch")
 	}
 
 	if user.Status != domain.UserStatusActive {
-		logLoginFailure(ctx, user.ID, "disabled_user")
-		return AuthResult{}, domain.ErrUnauthorized
+		return rejectUnauthorized(ctx, loginRejectedMsg, user.ID, "disabled_user")
 	}
 
 	accessToken, refreshToken, err := u.issueTokenPair(ctx, user, nil)
@@ -187,8 +187,7 @@ func (u *authUseCase) Refresh(ctx context.Context, in RefreshInput) (AuthResult,
 	stored, err := u.refreshTokens.GetByHash(ctx, tokenHash)
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
-		logRefreshFailure(ctx, uuid.Nil, "unknown_refresh_token")
-		return AuthResult{}, domain.ErrUnauthorized
+		return rejectUnauthorized(ctx, refreshRejectedMsg, uuid.Nil, "unknown_refresh_token")
 	case err != nil:
 		return AuthResult{}, fmt.Errorf("look up refresh token: %w", err)
 	}
@@ -198,27 +197,23 @@ func (u *authUseCase) Refresh(ctx context.Context, in RefreshInput) (AuthResult,
 		if revokeErr := u.refreshTokens.RevokeAllActiveForUser(ctx, stored.UserID, now); revokeErr != nil {
 			return AuthResult{}, fmt.Errorf("revoke refresh token family: %w", revokeErr)
 		}
-		logRefreshFailure(ctx, stored.UserID, "revoked_refresh_token")
-		return AuthResult{}, domain.ErrUnauthorized
+		return rejectUnauthorized(ctx, refreshRejectedMsg, stored.UserID, "revoked_refresh_token")
 	}
 
 	if stored.Expired(now) {
-		logRefreshFailure(ctx, stored.UserID, "expired_refresh_token")
-		return AuthResult{}, domain.ErrUnauthorized
+		return rejectUnauthorized(ctx, refreshRejectedMsg, stored.UserID, "expired_refresh_token")
 	}
 
 	user, err := u.repo.GetByID(ctx, stored.UserID)
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
-		logRefreshFailure(ctx, stored.UserID, "unknown_user")
-		return AuthResult{}, domain.ErrUnauthorized
+		return rejectUnauthorized(ctx, refreshRejectedMsg, stored.UserID, "unknown_user")
 	case err != nil:
 		return AuthResult{}, fmt.Errorf("load user: %w", err)
 	}
 
 	if user.Status != domain.UserStatusActive {
-		logRefreshFailure(ctx, user.ID, "disabled_user")
-		return AuthResult{}, domain.ErrUnauthorized
+		return rejectUnauthorized(ctx, refreshRejectedMsg, user.ID, "disabled_user")
 	}
 
 	rotated, err := u.refreshTokens.RevokeIfActive(ctx, tokenHash, now)
@@ -226,8 +221,7 @@ func (u *authUseCase) Refresh(ctx context.Context, in RefreshInput) (AuthResult,
 		return AuthResult{}, fmt.Errorf("revoke rotated refresh token: %w", err)
 	}
 	if !rotated {
-		logRefreshFailure(ctx, user.ID, "concurrent_rotation")
-		return AuthResult{}, domain.ErrUnauthorized
+		return rejectUnauthorized(ctx, refreshRejectedMsg, user.ID, "concurrent_rotation")
 	}
 
 	accessToken, refreshToken, err := u.issueTokenPair(ctx, user, &stored.ID)
@@ -338,18 +332,15 @@ func (u *authUseCase) verifyDummy(password string) {
 	_ = u.hasher.Verify(password, u.dummyHash)
 }
 
-func logRefreshFailure(ctx context.Context, userID uuid.UUID, reason string) {
+func logRejection(ctx context.Context, msg string, userID uuid.UUID, reason string) {
 	event := zerolog.Ctx(ctx).Info()
 	if userID != uuid.Nil {
 		event = event.Str("user_id", userID.String())
 	}
-	event.Str("reason", reason).Msg("refresh rejected")
+	event.Str("reason", reason).Msg(msg)
 }
 
-func logLoginFailure(ctx context.Context, userID uuid.UUID, reason string) {
-	event := zerolog.Ctx(ctx).Info()
-	if userID != uuid.Nil {
-		event = event.Str("user_id", userID.String())
-	}
-	event.Str("reason", reason).Msg("login rejected")
+func rejectUnauthorized(ctx context.Context, msg string, userID uuid.UUID, reason string) (AuthResult, error) {
+	logRejection(ctx, msg, userID, reason)
+	return AuthResult{}, domain.ErrUnauthorized
 }
