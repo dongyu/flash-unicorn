@@ -167,11 +167,11 @@ func RunTestMigrations(t *testing.T, dbConn *database.DB) {
 		src, err := iofs.New(db.PostgresMigrations, "postgres/migrations")
 		require.NoError(t, err)
 		sqlDB := stdlib.OpenDBFromPool(dbConn.Postgres)
-		t.Cleanup(func() { _ = sqlDB.Close() })
 		drv, err := pgx5migrate.WithInstance(sqlDB, &pgx5migrate.Config{})
 		require.NoError(t, err)
 		m, err := migrate.NewWithInstance("iofs", src, "pgx5", drv)
 		require.NoError(t, err)
+		defer func() { _, _ = m.Close() }()
 		err = m.Up()
 		if err != nil && !errors.Is(err, migrate.ErrNoChange) {
 			require.NoError(t, err)
