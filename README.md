@@ -124,7 +124,9 @@ cmd/server ─▶ internal/app ─▶ internal/adapter/{http,worker,repo,queue} 
 │   │       ├── queue/           # River 入队适配器（自动参与当前事务）
 │   │       └── txctx/           # 通过 context.Context 透传 pgx.Tx / *sql.Tx
 │   ├── platform/                # buildinfo、koanf 配置、Zerolog、数据库连接池、River 客户端、Sentry 与安全适配器
+│   ├── bootstrap/               # 双库仓储装配（服务与命令行共用，方言分派只此一处）
 │   ├── app/                     # 手写依赖组装 (Composition Root) 与优雅停机编排
+│   ├── seed/                    # 不依赖 HTTP 的建用户入口（server seed-user 使用）
 │   └── testkit/                 # 零 Docker SQLite 测试套件、HTTP/Problem 断言助手、双库契约测试基类
 │       └── mocks/               # GoMock 生成桩，按来源包拆分为 domain/ 与 usecase/ 避免循环依赖
 ├── scripts/

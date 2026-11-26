@@ -13,11 +13,9 @@ import (
 	httpadapter "unicorn/internal/adapter/http"
 	"unicorn/internal/adapter/http/handler"
 	"unicorn/internal/adapter/http/middleware"
-	postgresrepo "unicorn/internal/adapter/repo/postgres"
 	queueadapter "unicorn/internal/adapter/repo/queue"
-	sqliterepo "unicorn/internal/adapter/repo/sqlite"
 	"unicorn/internal/adapter/worker"
-	"unicorn/internal/domain"
+	"unicorn/internal/bootstrap"
 	"unicorn/internal/platform/buildinfo"
 	"unicorn/internal/platform/config"
 	"unicorn/internal/platform/database"
@@ -56,14 +54,14 @@ func New(ctx context.Context, cfg config.Config, log zerolog.Logger, opts ...Opt
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 
-	pers, err := buildPersistence(db)
+	pers, err := bootstrap.OpenPersistence(db)
 	if err != nil {
 		_ = db.Close()
 		flushSentry()
 		return nil, err
 	}
 
-	noteProcessor := usecase.NewNoteJobProcessor(pers.notes)
+	noteProcessor := usecase.NewNoteJobProcessor(pers.Notes)
 	workers := worker.RegisterWorkers(noteProcessor)
 	registerWorkers := cfg.Server.Mode == config.ModeAll || cfg.Server.Mode == config.ModeWorker
 
@@ -76,8 +74,8 @@ func New(ctx context.Context, cfg config.Config, log zerolog.Logger, opts ...Opt
 
 	enqueuer := queueadapter.NewEnqueuer(riverClient)
 	noteUC := usecase.NewNoteUseCase(
-		pers.tx,
-		pers.notes,
+		pers.Tx,
+		pers.Notes,
 		enqueuer,
 		deps.Clock,
 		deps.IDGenerator,
@@ -95,8 +93,8 @@ func New(ctx context.Context, cfg config.Config, log zerolog.Logger, opts ...Opt
 			deps.IDGenerator,
 		)
 		authUC, err := usecase.NewAuthUseCase(
-			pers.users,
-			pers.refreshTokenRepo,
+			pers.Users,
+			pers.RefreshTokens,
 			security.NewBcryptHasher(cfg.Auth.BcryptCost),
 			issuer,
 			security.NewRefreshTokenGenerator(),
@@ -221,32 +219,4 @@ func (a *Application) Run(ctx context.Context) error {
 	}
 	a.Logger.Info().Msg("shutdown complete")
 	return errors.Join(runErr, shutdownErr)
-}
-
-type persistence struct {
-	tx               domain.TxManager
-	notes            domain.NoteRepository
-	users            domain.UserRepository
-	refreshTokenRepo domain.RefreshTokenRepository
-}
-
-func buildPersistence(db *database.DB) (persistence, error) {
-	switch db.Dialect {
-	case database.DialectPostgres:
-		return persistence{
-			tx:               postgresrepo.NewTxManager(db.Postgres),
-			notes:            postgresrepo.NewNoteRepository(db.Postgres),
-			users:            postgresrepo.NewUserRepository(db.Postgres),
-			refreshTokenRepo: postgresrepo.NewRefreshTokenRepository(db.Postgres),
-		}, nil
-	case database.DialectSQLite:
-		return persistence{
-			tx:               sqliterepo.NewTxManager(db.SQLite),
-			notes:            sqliterepo.NewNoteRepository(db.SQLite),
-			users:            sqliterepo.NewUserRepository(db.SQLite),
-			refreshTokenRepo: sqliterepo.NewRefreshTokenRepository(db.SQLite),
-		}, nil
-	default:
-		return persistence{}, fmt.Errorf("unsupported dialect %q", db.Dialect)
-	}
 }

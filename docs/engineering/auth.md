@@ -17,7 +17,7 @@
 | 仓储 | `internal/adapter/repo/{postgres,sqlite}/user_repo.go` | 把生成模型映射回 `domain.User` |
 | DTO | `internal/adapter/http/dto/auth.go` | 在 `AuthUserResponse` 与 `ToAuthUserResponse` 中暴露字段 |
 | 用例 | `internal/usecase/auth.go` | 只在注册或种子创建需要接收该字段时，扩展 `RegisterInput` / `SeedUserInput` |
-| 种子 | `internal/app/seed.go`、`internal/usecase/seed_user.go`、`internal/testkit/auth.go` | 需要从 `make seed-user` 或测试夹具写入时同步 |
+| 种子 | `internal/seed/seed.go`、`internal/usecase/seed_user.go`、`internal/testkit/auth.go` | 需要从 `make seed-user` 或测试夹具写入时同步 |
 | 处理器 | `internal/adapter/http/handler/auth.go` | 只是把 DTO 映射到新的用例输入，不承载业务判断 |
 
 令牌与中间件不需要动：**AccessToken** 只携带 `sub` 与 `roles`，新增字段通过 `GET /api/v1/auth/me` 回库读取。

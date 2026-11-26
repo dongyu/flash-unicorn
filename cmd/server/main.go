@@ -20,6 +20,7 @@ import (
 	"unicorn/internal/platform/config"
 	"unicorn/internal/platform/database"
 	"unicorn/internal/platform/logger"
+	"unicorn/internal/seed"
 	"unicorn/internal/usecase"
 )
 
@@ -110,7 +111,7 @@ func runSeedUserCmd(args []string, stdin io.Reader) error {
 		return err
 	}
 
-	user, err := app.SeedUser(context.Background(), cfg, usecase.SeedUserInput{
+	user, err := seed.Run(context.Background(), cfg, usecase.SeedUserInput{
 		Email:       *email,
 		Password:    password,
 		Role:        domain.Role(*role),
