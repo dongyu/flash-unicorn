@@ -23,22 +23,24 @@ func TestUserRepository_PostgresContract(t *testing.T) {
 	}
 
 	suite.Run(t, &testkit.UserRepositorySuite{
-		NewHarness: func() testkit.RepoHarness {
-			ctx := context.Background()
-			dbConn, err := database.Open(ctx, config.DatabaseConfig{
-				URL:          dsn,
-				MaxOpenConns: 5,
-			})
-			require.NoError(t, err)
-			testkit.RunTestMigrations(t, dbConn)
+		RepoSuite: testkit.RepoSuite{
+			NewHarness: func() testkit.RepoHarness {
+				ctx := context.Background()
+				dbConn, err := database.Open(ctx, config.DatabaseConfig{
+					URL:          dsn,
+					MaxOpenConns: 5,
+				})
+				require.NoError(t, err)
+				testkit.RunTestMigrations(t, dbConn)
 
-			_, err = dbConn.Postgres.Exec(ctx, "TRUNCATE TABLE users, notes, river_job RESTART IDENTITY CASCADE")
-			require.NoError(t, err)
+				_, err = dbConn.Postgres.Exec(ctx, "TRUNCATE TABLE users, notes, river_job RESTART IDENTITY CASCADE")
+				require.NoError(t, err)
 
-			return testkit.RepoHarness{
-				UserRepo: postgresrepo.NewUserRepository(dbConn.Postgres),
-				Cleanup:  func() { _ = dbConn.Close() },
-			}
+				return testkit.RepoHarness{
+					UserRepo: postgresrepo.NewUserRepository(dbConn.Postgres),
+					Cleanup:  func() { _ = dbConn.Close() },
+				}
+			},
 		},
 	})
 }

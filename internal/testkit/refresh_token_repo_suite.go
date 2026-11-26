@@ -5,25 +5,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/suite"
 
 	"unicorn/internal/domain"
 )
 
 type RefreshTokenRepositorySuite struct {
-	suite.Suite
-	NewHarness func() RepoHarness
-	harness    RepoHarness
-}
-
-func (s *RefreshTokenRepositorySuite) SetupTest() {
-	s.harness = s.NewHarness()
-}
-
-func (s *RefreshTokenRepositorySuite) TearDownTest() {
-	if s.harness.Cleanup != nil {
-		s.harness.Cleanup()
-	}
+	RepoSuite
 }
 
 func (s *RefreshTokenRepositorySuite) seedUser(id uuid.UUID) domain.User {
