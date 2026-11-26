@@ -156,7 +156,7 @@ func (u *authUseCase) Login(ctx context.Context, in LoginInput) (LoginResult, er
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		u.verifyDummy(in.Password)
-		logLoginFailure(ctx, email, "unknown_user")
+		logLoginFailure(ctx, uuid.Nil, "unknown_user")
 		return LoginResult{}, domain.ErrUnauthorized
 	case err != nil:
 		return LoginResult{}, fmt.Errorf("look up user by email: %w", err)
@@ -164,17 +164,17 @@ func (u *authUseCase) Login(ctx context.Context, in LoginInput) (LoginResult, er
 
 	if user.PasswordHash == "" {
 		u.verifyDummy(in.Password)
-		logLoginFailure(ctx, email, "missing_credential")
+		logLoginFailure(ctx, user.ID, "missing_credential")
 		return LoginResult{}, domain.ErrUnauthorized
 	}
 
 	if verifyErr := u.hasher.Verify(in.Password, user.PasswordHash); verifyErr != nil {
-		logLoginFailure(ctx, email, "password_mismatch")
+		logLoginFailure(ctx, user.ID, "password_mismatch")
 		return LoginResult{}, domain.ErrUnauthorized
 	}
 
 	if user.Status != domain.UserStatusActive {
-		logLoginFailure(ctx, email, "disabled_user")
+		logLoginFailure(ctx, user.ID, "disabled_user")
 		return LoginResult{}, domain.ErrUnauthorized
 	}
 
@@ -360,9 +360,10 @@ func logRefreshFailure(ctx context.Context, userID uuid.UUID, reason string) {
 	event.Str("reason", reason).Msg("refresh rejected")
 }
 
-func logLoginFailure(ctx context.Context, email, reason string) {
-	zerolog.Ctx(ctx).Info().
-		Str("email", email).
-		Str("reason", reason).
-		Msg("login rejected")
+func logLoginFailure(ctx context.Context, userID uuid.UUID, reason string) {
+	event := zerolog.Ctx(ctx).Info()
+	if userID != uuid.Nil {
+		event = event.Str("user_id", userID.String())
+	}
+	event.Str("reason", reason).Msg("login rejected")
 }

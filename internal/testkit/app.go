@@ -40,6 +40,7 @@ type TestApp struct {
 type Options struct {
 	Config     config.Config
 	AppOptions []app.Option
+	Logger     *zerolog.Logger
 }
 
 type Option func(*Options)
@@ -65,6 +66,12 @@ func WithIDGenerator(idGen domain.IDGenerator) Option {
 func WithConfig(mutate func(cfg *config.Config)) Option {
 	return func(o *Options) {
 		mutate(&o.Config)
+	}
+}
+
+func WithLogger(log zerolog.Logger) Option {
+	return func(o *Options) {
+		o.Logger = &log
 	}
 }
 
@@ -118,6 +125,9 @@ func NewTestApp(t *testing.T, opts ...Option) *TestApp {
 	require.NoError(t, rawDB.Close())
 
 	testLog := zerolog.New(io.Discard)
+	if setup.Logger != nil {
+		testLog = *setup.Logger
+	}
 	application, err := app.New(ctx, cfg, testLog, setup.AppOptions...)
 	require.NoError(t, err)
 

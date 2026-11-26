@@ -16,6 +16,7 @@ type AuthHandler struct {
 	uc                usecase.AuthUseCase
 	validate          *validator.Validate
 	requireAuth       fiber.Handler
+	credentialLimiter fiber.Handler
 	allowRegistration bool
 }
 
@@ -23,12 +24,14 @@ func NewAuthHandler(
 	uc usecase.AuthUseCase,
 	validate *validator.Validate,
 	requireAuth fiber.Handler,
+	credentialLimiter fiber.Handler,
 	allowRegistration bool,
 ) *AuthHandler {
 	return &AuthHandler{
 		uc:                uc,
 		validate:          validate,
 		requireAuth:       requireAuth,
+		credentialLimiter: credentialLimiter,
 		allowRegistration: allowRegistration,
 	}
 }
@@ -36,9 +39,9 @@ func NewAuthHandler(
 func (h *AuthHandler) RegisterRoutes(api fiber.Router) {
 	auth := api.Group("/auth")
 	if h.allowRegistration {
-		auth.Post("/register", h.Register)
+		auth.Post("/register", h.credentialLimiter, h.Register)
 	}
-	auth.Post("/login", h.Login)
+	auth.Post("/login", h.credentialLimiter, h.Login)
 	auth.Post("/refresh", h.Refresh)
 	auth.Post("/logout", h.Logout)
 	auth.Get("/me", h.requireAuth, h.Me)
