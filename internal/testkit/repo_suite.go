@@ -12,11 +12,13 @@ import (
 )
 
 type RepoHarness struct {
-	TxManager domain.TxManager
-	NoteRepo  domain.NoteRepository
-	UserRepo  domain.UserRepository
-	Enqueuer  domain.JobEnqueuer
-	Cleanup   func()
+	TxManager        domain.TxManager
+	NoteRepo         domain.NoteRepository
+	UserRepo         domain.UserRepository
+	RefreshTokenRepo domain.RefreshTokenRepository
+	Enqueuer         domain.JobEnqueuer
+	DeleteUser       func(userID uuid.UUID) error
+	Cleanup          func()
 }
 
 type NoteRepositorySuite struct {

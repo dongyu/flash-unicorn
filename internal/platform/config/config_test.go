@@ -138,6 +138,7 @@ func TestLoad_AuthDefaults(t *testing.T) {
 	require.Equal(t, "unicorn", cfg.Auth.Issuer)
 	require.GreaterOrEqual(t, len(cfg.Auth.Secret), 32)
 	require.Equal(t, 15*time.Minute, cfg.Auth.AccessTTL)
+	require.Equal(t, 720*time.Hour, cfg.Auth.RefreshTTL)
 	require.Equal(t, 30*time.Second, cfg.Auth.Leeway)
 }
 
@@ -148,6 +149,7 @@ func TestLoad_AuthFromEnv(t *testing.T) {
 				"AUTH_ISSUER=acme",
 				"AUTH_SECRET=" + fixtureSigningKey,
 				"AUTH_ACCESS_TTL=5m",
+				"AUTH_REFRESH_TTL=24h",
 				"AUTH_LEEWAY=10s",
 			}
 		},
@@ -156,6 +158,7 @@ func TestLoad_AuthFromEnv(t *testing.T) {
 	require.Equal(t, "acme", cfg.Auth.Issuer)
 	require.Equal(t, fixtureSigningKey, cfg.Auth.Secret)
 	require.Equal(t, 5*time.Minute, cfg.Auth.AccessTTL)
+	require.Equal(t, 24*time.Hour, cfg.Auth.RefreshTTL)
 	require.Equal(t, 10*time.Second, cfg.Auth.Leeway)
 }
 

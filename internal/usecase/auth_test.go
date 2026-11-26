@@ -10,7 +10,6 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"unicorn/internal/domain"
-	"unicorn/internal/testkit"
 	domainmock "unicorn/internal/testkit/mocks/domain"
 	"unicorn/internal/usecase"
 )
@@ -42,15 +41,17 @@ func newAuthUseCase(
 	idGen domain.IDGenerator,
 ) usecase.AuthUseCase {
 	t.Helper()
-	uc, err := usecase.NewAuthUseCase(
+	refreshTokens := domainmock.NewMockRefreshTokenRepository(gomock.NewController(t))
+	refreshTokens.EXPECT().Create(gomock.Any(), gomock.Any()).Return(domain.RefreshTokenRecord{}, nil).AnyTimes()
+	return newAuthUseCaseWith(
+		t,
 		repo,
+		refreshTokens,
+		&stubRefreshTokenGenerator{},
 		hasher,
 		issuer,
-		testkit.NewFakeClock(authFixedNow),
 		idGen,
 	)
-	require.NoError(t, err)
-	return uc
 }
 
 func activeUser(t *testing.T) domain.User {
@@ -85,6 +86,7 @@ func TestAuthUseCase_LoginIssuesAccessTokenForActiveUser(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, "signed-access-token", result.AccessToken.Value)
+	require.Equal(t, domain.RefreshToken("generated-refresh-token-1"), result.RefreshToken)
 	require.Equal(t, int64(900), result.ExpiresIn)
 	require.Equal(t, "user@example.com", result.User.Email)
 	require.Equal(t, domain.Principal{
@@ -236,6 +238,7 @@ func TestAuthUseCase_RegisterCreatesActiveUserAndIssuesAccessToken(t *testing.T)
 	hasher.EXPECT().Hash(gomock.Any()).Return("dummy-bcrypt-hash", nil)
 	hasher.EXPECT().Hash("correct-horse-battery").Return("new-bcrypt-hash", nil)
 	idGen.EXPECT().NewID().Return(userID, nil)
+	idGen.EXPECT().NewID().Return(uuid.MustParse("01930000-0000-7000-8000-0000000000b1"), nil)
 	repo.EXPECT().
 		Create(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, user domain.User) (domain.User, error) {
@@ -252,6 +255,7 @@ func TestAuthUseCase_RegisterCreatesActiveUserAndIssuesAccessToken(t *testing.T)
 	require.NoError(t, err)
 	require.Equal(t, "signed-access-token", result.AccessToken.Value)
 	require.Equal(t, int64(900), result.ExpiresIn)
+	require.Equal(t, domain.RefreshToken("generated-refresh-token-1"), result.RefreshToken)
 	require.Equal(t, userID, result.User.ID)
 	require.Equal(t, "new.user@example.com", result.User.Email)
 	require.Equal(t, "new-bcrypt-hash", result.User.PasswordHash)

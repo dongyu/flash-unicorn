@@ -92,6 +92,6 @@ func TestFullStack_InjectedClockAndIDGeneratorDriveNoteCreation(t *testing.T) {
 	}
 	createRes := testkit.DoJSONAuth[map[string]string, noteResponse](t, ta.HTTP, http.MethodPost, "/api/v1/notes", token, &createReq)
 	require.Equal(t, http.StatusCreated, createRes.StatusCode)
-	require.Equal(t, uuid.MustParse("00000000-0000-7000-8000-000000000002"), createRes.Data.ID)
+	require.Equal(t, uuid.MustParse("00000000-0000-7000-8000-000000000003"), createRes.Data.ID)
 	require.True(t, fixedNow.Equal(createRes.Data.CreatedAt), "created_at = %s, want %s", createRes.Data.CreatedAt, fixedNow)
 }

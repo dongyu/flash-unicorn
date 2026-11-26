@@ -91,6 +91,7 @@ func defaultTestConfig() config.Config {
 			Issuer:            "unicorn-test",
 			Secret:            testSigningKey,
 			AccessTTL:         15 * time.Minute,
+			RefreshTTL:        720 * time.Hour,
 			Leeway:            30 * time.Second,
 			BcryptCost:        4,
 			AllowRegistration: &allowRegistration,
