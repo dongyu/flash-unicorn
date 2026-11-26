@@ -20,35 +20,14 @@ type LoginInput struct {
 	Password string
 }
 
-type LoginResult struct {
-	AccessToken  domain.AccessToken
-	RefreshToken domain.RefreshToken
-	ExpiresIn    int64
-	User         domain.User
-}
-
 type RegisterInput struct {
 	Email       string
 	Password    string
 	DisplayName string
 }
 
-type RegisterResult struct {
-	AccessToken  domain.AccessToken
-	RefreshToken domain.RefreshToken
-	ExpiresIn    int64
-	User         domain.User
-}
-
 type RefreshInput struct {
 	RefreshToken domain.RefreshToken
-}
-
-type RefreshResult struct {
-	AccessToken  domain.AccessToken
-	RefreshToken domain.RefreshToken
-	ExpiresIn    int64
-	User         domain.User
 }
 
 type LogoutInput struct {
@@ -56,10 +35,17 @@ type LogoutInput struct {
 	All          bool
 }
 
+type AuthResult struct {
+	AccessToken  domain.AccessToken
+	RefreshToken domain.RefreshToken
+	ExpiresIn    int64
+	User         domain.User
+}
+
 type AuthUseCase interface {
-	Register(ctx context.Context, in RegisterInput) (RegisterResult, error)
-	Login(ctx context.Context, in LoginInput) (LoginResult, error)
-	Refresh(ctx context.Context, in RefreshInput) (RefreshResult, error)
+	Register(ctx context.Context, in RegisterInput) (AuthResult, error)
+	Login(ctx context.Context, in LoginInput) (AuthResult, error)
+	Refresh(ctx context.Context, in RefreshInput) (AuthResult, error)
 	Logout(ctx context.Context, in LogoutInput) error
 	Me(ctx context.Context) (domain.User, error)
 }
@@ -103,15 +89,15 @@ func NewAuthUseCase(
 	}, nil
 }
 
-func (u *authUseCase) Register(ctx context.Context, in RegisterInput) (RegisterResult, error) {
+func (u *authUseCase) Register(ctx context.Context, in RegisterInput) (AuthResult, error) {
 	passwordHash, err := u.hasher.Hash(in.Password)
 	if err != nil {
-		return RegisterResult{}, fmt.Errorf("hash password: %w", err)
+		return AuthResult{}, fmt.Errorf("hash password: %w", err)
 	}
 
 	id, err := u.idGen.NewID()
 	if err != nil {
-		return RegisterResult{}, fmt.Errorf("generate user id: %w", err)
+		return AuthResult{}, fmt.Errorf("generate user id: %w", err)
 	}
 
 	now := u.clock.Now().UTC()
@@ -127,21 +113,21 @@ func (u *authUseCase) Register(ctx context.Context, in RegisterInput) (RegisterR
 	})
 	if err != nil {
 		if errors.Is(err, domain.ErrConflict) {
-			return RegisterResult{}, domain.ErrConflict
+			return AuthResult{}, domain.ErrConflict
 		}
-		return RegisterResult{}, fmt.Errorf("persist user: %w", err)
+		return AuthResult{}, fmt.Errorf("persist user: %w", err)
 	}
 
 	accessToken, refreshToken, err := u.issueTokenPair(ctx, created, nil)
 	if err != nil {
-		return RegisterResult{}, err
+		return AuthResult{}, err
 	}
 
 	zerolog.Ctx(ctx).Info().
 		Str("user_id", created.ID.String()).
 		Msg("user registered")
 
-	return RegisterResult{
+	return AuthResult{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		ExpiresIn:    u.expiresIn(accessToken),
@@ -149,7 +135,7 @@ func (u *authUseCase) Register(ctx context.Context, in RegisterInput) (RegisterR
 	}, nil
 }
 
-func (u *authUseCase) Login(ctx context.Context, in LoginInput) (LoginResult, error) {
+func (u *authUseCase) Login(ctx context.Context, in LoginInput) (AuthResult, error) {
 	email := domain.NormalizeEmail(in.Email)
 
 	user, err := u.repo.GetByEmail(ctx, email)
@@ -157,37 +143,37 @@ func (u *authUseCase) Login(ctx context.Context, in LoginInput) (LoginResult, er
 	case errors.Is(err, domain.ErrNotFound):
 		u.verifyDummy(in.Password)
 		logLoginFailure(ctx, uuid.Nil, "unknown_user")
-		return LoginResult{}, domain.ErrUnauthorized
+		return AuthResult{}, domain.ErrUnauthorized
 	case err != nil:
-		return LoginResult{}, fmt.Errorf("look up user by email: %w", err)
+		return AuthResult{}, fmt.Errorf("look up user by email: %w", err)
 	}
 
 	if user.PasswordHash == "" {
 		u.verifyDummy(in.Password)
 		logLoginFailure(ctx, user.ID, "missing_credential")
-		return LoginResult{}, domain.ErrUnauthorized
+		return AuthResult{}, domain.ErrUnauthorized
 	}
 
 	if verifyErr := u.hasher.Verify(in.Password, user.PasswordHash); verifyErr != nil {
 		logLoginFailure(ctx, user.ID, "password_mismatch")
-		return LoginResult{}, domain.ErrUnauthorized
+		return AuthResult{}, domain.ErrUnauthorized
 	}
 
 	if user.Status != domain.UserStatusActive {
 		logLoginFailure(ctx, user.ID, "disabled_user")
-		return LoginResult{}, domain.ErrUnauthorized
+		return AuthResult{}, domain.ErrUnauthorized
 	}
 
 	accessToken, refreshToken, err := u.issueTokenPair(ctx, user, nil)
 	if err != nil {
-		return LoginResult{}, err
+		return AuthResult{}, err
 	}
 
 	zerolog.Ctx(ctx).Info().
 		Str("user_id", user.ID.String()).
 		Msg("user logged in")
 
-	return LoginResult{
+	return AuthResult{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		ExpiresIn:    u.expiresIn(accessToken),
@@ -195,65 +181,65 @@ func (u *authUseCase) Login(ctx context.Context, in LoginInput) (LoginResult, er
 	}, nil
 }
 
-func (u *authUseCase) Refresh(ctx context.Context, in RefreshInput) (RefreshResult, error) {
+func (u *authUseCase) Refresh(ctx context.Context, in RefreshInput) (AuthResult, error) {
 	tokenHash := u.refreshGen.HashRefreshToken(in.RefreshToken)
 
 	stored, err := u.refreshTokens.GetByHash(ctx, tokenHash)
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		logRefreshFailure(ctx, uuid.Nil, "unknown_refresh_token")
-		return RefreshResult{}, domain.ErrUnauthorized
+		return AuthResult{}, domain.ErrUnauthorized
 	case err != nil:
-		return RefreshResult{}, fmt.Errorf("look up refresh token: %w", err)
+		return AuthResult{}, fmt.Errorf("look up refresh token: %w", err)
 	}
 
 	now := u.clock.Now().UTC()
 	if stored.Revoked() {
 		if revokeErr := u.refreshTokens.RevokeAllActiveForUser(ctx, stored.UserID, now); revokeErr != nil {
-			return RefreshResult{}, fmt.Errorf("revoke refresh token family: %w", revokeErr)
+			return AuthResult{}, fmt.Errorf("revoke refresh token family: %w", revokeErr)
 		}
 		logRefreshFailure(ctx, stored.UserID, "revoked_refresh_token")
-		return RefreshResult{}, domain.ErrUnauthorized
+		return AuthResult{}, domain.ErrUnauthorized
 	}
 
 	if stored.Expired(now) {
 		logRefreshFailure(ctx, stored.UserID, "expired_refresh_token")
-		return RefreshResult{}, domain.ErrUnauthorized
+		return AuthResult{}, domain.ErrUnauthorized
 	}
 
 	user, err := u.repo.GetByID(ctx, stored.UserID)
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		logRefreshFailure(ctx, stored.UserID, "unknown_user")
-		return RefreshResult{}, domain.ErrUnauthorized
+		return AuthResult{}, domain.ErrUnauthorized
 	case err != nil:
-		return RefreshResult{}, fmt.Errorf("load user: %w", err)
+		return AuthResult{}, fmt.Errorf("load user: %w", err)
 	}
 
 	if user.Status != domain.UserStatusActive {
 		logRefreshFailure(ctx, user.ID, "disabled_user")
-		return RefreshResult{}, domain.ErrUnauthorized
+		return AuthResult{}, domain.ErrUnauthorized
 	}
 
 	rotated, err := u.refreshTokens.RevokeIfActive(ctx, tokenHash, now)
 	if err != nil {
-		return RefreshResult{}, fmt.Errorf("revoke rotated refresh token: %w", err)
+		return AuthResult{}, fmt.Errorf("revoke rotated refresh token: %w", err)
 	}
 	if !rotated {
 		logRefreshFailure(ctx, user.ID, "concurrent_rotation")
-		return RefreshResult{}, domain.ErrUnauthorized
+		return AuthResult{}, domain.ErrUnauthorized
 	}
 
 	accessToken, refreshToken, err := u.issueTokenPair(ctx, user, &stored.ID)
 	if err != nil {
-		return RefreshResult{}, err
+		return AuthResult{}, err
 	}
 
 	zerolog.Ctx(ctx).Info().
 		Str("user_id", user.ID.String()).
 		Msg("refresh token rotated")
 
-	return RefreshResult{
+	return AuthResult{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		ExpiresIn:    u.expiresIn(accessToken),

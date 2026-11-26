@@ -14,9 +14,9 @@ import (
 	"unicorn/internal/testkit"
 )
 
-func registerUser(t *testing.T, ta *testkit.TestApp, req dto.RegisterRequest) testkit.HTTPResult[dto.RegisterResponse] {
+func registerUser(t *testing.T, ta *testkit.TestApp, req dto.RegisterRequest) testkit.HTTPResult[dto.AuthTokenResponse] {
 	t.Helper()
-	return testkit.DoJSON[dto.RegisterRequest, dto.RegisterResponse](
+	return testkit.DoJSON[dto.RegisterRequest, dto.AuthTokenResponse](
 		t, ta.HTTP, http.MethodPost, "/api/v1/auth/register", &req,
 	)
 }
